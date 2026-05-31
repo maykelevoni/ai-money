@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="30">
+  <title>ai-money ops</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dash-static/dashboard.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <span class="logo">ai-money</span>
+    <span class="live-dot"></span>
+    <span class="live-label">LIVE</span>
+  </div>
+  <div class="header-right">
+    <span class="ts">{{ now }} &middot; auto-refresh every 30s</span>
+  </div>
+</header>
+
+<!-- BUDGET -->
+<section class="section budget-section">
+  <h2 class="section-title">Global Budget</h2>
+  <div class="budget-bar-wrap">
+    <div class="budget-bar-fill{% if budget.near_cap %} near-cap{% endif %}"
+         style="width: {{ budget.pct }}%"></div>
+  </div>
+  <div class="budget-metrics">
+    <div class="metric">
+      <span class="metric-label">Funded</span>
+      <span class="metric-value">${{ "%.2f"|format(budget.funded) }}</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Spent</span>
+      <span class="metric-value{% if budget.near_cap %} danger{% endif %}">${{ "%.2f"|format(budget.spent) }}</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Remaining</span>
+      <span class="metric-value{% if budget.near_cap %} danger{% endif %}">${{ "%.2f"|format(budget.remaining) }}</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Cap</span>
+      <span class="metric-value">${{ "%.2f"|format(budget.cap) }}</span>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Used</span>
+      <span class="metric-value{% if budget.near_cap %} danger{% endif %}">{{ budget.pct }}%</span>
+    </div>
+  </div>
+  {% if budget.near_cap %}
+  <div class="cap-alert">&#9888; Budget &ge;80% consumed &mdash; optimizer may pause all campaigns</div>
+  {% endif %}
+</section>
+
+<!-- CAMPAIGNS TABLE -->
+<section class="section">
+  <h2 class="section-title">
+    Campaigns
+    <span class="count-badge">{{ campaigns|length }}</span>
+  </h2>
+  {% if campaigns %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Offer</th>
+          <th>Status</th>
+          <th class="num">Spend</th>
+          <th class="num">Revenue</th>
+          <th class="num">ROI%</th>
+          <th class="num">Conv</th>
+          <th class="num">Daily Cap</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in campaigns %}
+        <tr class="{% if c.profitable %}profitable-row{% endif %}">
+          <td class="mono dim">{{ c.id }}</td>
+          <td class="offer-name">{{ c.offer_name }}</td>
+          <td><span class="status-badge status-{{ c.status }}">{{ c.status }}</span></td>
+          <td class="num mono">${{ "%.2f"|format(c.spend) }}</td>
+          <td class="num mono">${{ "%.2f"|format(c.revenue) }}</td>
+          <td class="num mono{% if c.roi > 0 %} positive{% elif c.roi < -20 %} danger{% endif %}">
+            {% if c.roi > 0 %}+{% endif %}{{ c.roi }}%
+          </td>
+          <td class="num mono">{{ c.conversions }}</td>
+          <td class="num mono">${{ "%.2f"|format(c.daily_cap) }}</td>
+          <td class="badge-cell">
+            {% if c.profitable %}
+            <span class="scale-badge">SCALE ME</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No campaigns yet &mdash; engine will launch one on the next scheduled run.</p>
+  {% endif %}
+</section>
+
+<!-- BOTTOM: DECISIONS + PIPELINE -->
+<div class="bottom-grid">
+
+  <!-- DECISIONS FEED -->
+  <section class="section decisions-section">
+    <h2 class="section-title">Optimizer Decisions</h2>
+    {% if decisions %}
+    <div class="decisions-feed">
+      {% for d in decisions %}
+      <div class="decision-item">
+        <div class="decision-meta">
+          <span class="mono dim decision-ts">{{ d.ts }}</span>
+          <span class="action-chip action-{{ d.action }}">{{ d.action }}</span>
+          <span class="dim">{{ d.scope }} #{{ d.target_id }}</span>
+        </div>
+        <div class="decision-reason">{{ d.reason }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No decisions yet &mdash; optimizer has not run.</p>
+    {% endif %}
+  </section>
+
+  <!-- OFFER PIPELINE -->
+  <section class="section pipeline-section">
+    <h2 class="section-title">Offer Pipeline</h2>
+    <div class="pipeline-chips">
+      <div class="pipeline-chip chip-candidate">
+        <span class="chip-count">{{ pipeline.candidate }}</span>
+        <span class="chip-label">Candidate</span>
+      </div>
+      <div class="pipeline-chip chip-testing">
+        <span class="chip-count">{{ pipeline.testing }}</span>
+        <span class="chip-label">Testing</span>
+      </div>
+      <div class="pipeline-chip chip-winner">
+        <span class="chip-count">{{ pipeline.winner }}</span>
+        <span class="chip-label">Winner</span>
+      </div>
+      <div class="pipeline-chip chip-loser">
+        <span class="chip-count">{{ pipeline.loser }}</span>
+        <span class="chip-label">Loser</span>
+      </div>
+      <div class="pipeline-chip chip-excluded">
+        <span class="chip-count">{{ pipeline.excluded }}</span>
+        <span class="chip-label">Excluded</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
