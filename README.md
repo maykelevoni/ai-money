@@ -16,7 +16,15 @@ autonomously — killing losers, scaling winners, blacklisting bad zones.
 offers cheaply until one does. The goal is **proof** — a single campaign where
 `revenue > ad spend`, running hands-off — not big money.
 
-## Quick start
+## Setup & Deployment
+
+**One-time setup (accounts, keys, VPS, HTTPS):** see [`SETUP.md`](SETUP.md).
+
+The SETUP.md walks through: creating the CPA and traffic network accounts, funding
+the ad budget, setting up a Telegram bot, pointing a domain at the VPS, filling in
+`.env`, configuring the postback URL, and installing the systemd service + Caddy.
+
+## Quick start (local / dev)
 
 ```bash
 # 1. Install dependencies
@@ -30,7 +38,20 @@ cp config/.env.example config/.env
 uvicorn src.main:app --host 0.0.0.0 --port 8000
 ```
 
-For VPS deployment (systemd + Caddy HTTPS), see `SETUP.md`.
+## VPS deployment (production)
+
+```bash
+# systemd service (auto-restart on crash/reboot)
+sudo cp deploy/ai-money.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now ai-money
+
+# Caddy HTTPS reverse proxy (automatic TLS)
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+# edit /etc/caddy/Caddyfile — replace yourdomain.example.com
+sudo systemctl reload caddy
+```
+
+See [`SETUP.md`](SETUP.md) for the full step-by-step guide.
 
 ## Architecture
 

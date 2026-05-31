@@ -1,0 +1,20 @@
+# secrets & runtime data
+config/.env
+.env
+data/
+landers/
+src/static/icons/*.png
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# ship internals
+.ship/logs/
+.ship/blockers/
+
+# spike output
+spike/FINDINGS.md

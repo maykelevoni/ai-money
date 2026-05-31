@@ -1,0 +1,21 @@
+[Unit]
+Description=ai-money Autonomous Affiliate Engine
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/ai-money
+EnvironmentFile=/opt/ai-money/config/.env
+ExecStart=/opt/ai-money/.venv/bin/uvicorn src.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-money
+
+# Prevent the service from acquiring new privileges
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
