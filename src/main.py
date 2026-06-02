@@ -6,6 +6,7 @@ from src.db import init_db
 from src.scheduler import create_scheduler
 from src.tracker import register_tracker_routes
 from src.dashboard import register_dashboard_routes
+from src.home import register_home_routes
 
 
 @asynccontextmanager
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ai-money engine", docs_url=None, redoc_url=None, lifespan=lifespan)
 
+register_home_routes(app)
 register_tracker_routes(app)
 register_dashboard_routes(app)
 
