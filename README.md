@@ -6,7 +6,7 @@ autonomously — killing losers, scaling winners, blacklisting bad zones.
 
 **Traffic network:** PropellerAds (Advertiser API v5)  
 **CPA network:** MyLead (preferred) / CPALead (fallback)  
-**LLM:** Claude Haiku (landing-page copy + ad creatives)  
+**LLM:** OpenRouter (model via `LLM_MODEL`; default `deepseek/deepseek-chat`) for landing-page copy + ad creatives  
 **Reports:** Telegram daily summary  
 **Budget:** $100 seed, hard caps enforced in code + via API  
 

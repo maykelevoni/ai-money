@@ -95,7 +95,8 @@ Fill in every value:
 | `PROPELLERADS_API_KEY` | PropellerAds → Account Settings → API |
 | `MYLEAD_API_KEY` | MyLead → Settings → API |
 | `CPALEAD_AFFILIATE_ID` | CPALead → Account Info (only if using CPALead) |
-| `ANTHROPIC_API_KEY` | https://console.anthropic.com/ |
+| `OPENROUTER_API_KEY` | https://openrouter.ai/keys |
+| `LLM_MODEL` | OpenRouter model id (optional; default `deepseek/deepseek-chat`) |
 | `TELEGRAM_BOT_TOKEN` | @BotFather → your bot token |
 | `TELEGRAM_CHAT_ID` | `getUpdates` response (step 5 above) |
 | `DOMAIN` | Your domain, no trailing slash: `https://yourdomain.example.com` |

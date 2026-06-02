@@ -137,9 +137,9 @@ def register_dashboard_routes(app: FastAPI) -> None:
         _check_token(request)
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         return _templates.TemplateResponse(
+            request,
             "dashboard.html",
             {
-                "request": request,
                 "now": now,
                 "budget": _budget_data(),
                 "campaigns": _campaigns_data(),

@@ -3,7 +3,7 @@ import os
 # Set dummy env vars before any src import triggers config._load()
 for _key, _val in {
     "PROPELLERADS_API_KEY": "test-key",
-    "ANTHROPIC_API_KEY": "test-key",
+    "OPENROUTER_API_KEY": "test-key",
     "TELEGRAM_BOT_TOKEN": "test-token",
     "TELEGRAM_CHAT_ID": "test-chat",
     "DOMAIN": "test.example.com",
@@ -25,7 +25,8 @@ def _cfg(**overrides) -> Settings:
         propellerads_api_key="test",
         mylead_api_key="test",
         cpalead_affiliate_id="",
-        anthropic_api_key="test",
+        openrouter_api_key="test",
+        llm_model="deepseek/deepseek-chat",
         telegram_bot_token="test",
         telegram_chat_id="test",
         domain="test.example.com",

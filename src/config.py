@@ -1,8 +1,16 @@
 import os
+from pathlib import Path
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load config/.env (the project's canonical env location, where .env.example lives
+# and SETUP.md points). Resolve relative to this file so it works from any CWD.
+# Fall back to a root .env / default upward search if config/.env is absent.
+_ENV_PATH = Path(__file__).resolve().parent.parent / "config" / ".env"
+if _ENV_PATH.exists():
+    load_dotenv(_ENV_PATH)
+else:
+    load_dotenv()
 
 
 def _require(key: str) -> str:
@@ -48,8 +56,9 @@ class Settings:
     mylead_api_key: str
     cpalead_affiliate_id: str
 
-    # LLM
-    anthropic_api_key: str
+    # LLM (OpenRouter — OpenAI-compatible; model is swappable via LLM_MODEL)
+    openrouter_api_key: str
+    llm_model: str
 
     # Notifications
     telegram_bot_token: str
@@ -87,7 +96,8 @@ def _load() -> Settings:
         propellerads_api_key=_require("PROPELLERADS_API_KEY"),
         mylead_api_key=mylead,
         cpalead_affiliate_id=cpalead,
-        anthropic_api_key=_require("ANTHROPIC_API_KEY"),
+        openrouter_api_key=_require("OPENROUTER_API_KEY"),
+        llm_model=_optional("LLM_MODEL", "google/gemini-2.0-flash-001"),
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
         domain=_require("DOMAIN"),
