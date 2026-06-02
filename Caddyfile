@@ -1,0 +1,11 @@
+# Caddy auto-provisions HTTPS (Let's Encrypt) for the domain and reverse-proxies
+# all traffic to the app container on the internal compose network.
+# Requires: getpostforge.cloud A-record pointing at this VPS, ports 80+443 open.
+getpostforge.cloud {
+	reverse_proxy app:8000
+}
+
+# Optional: redirect the www subdomain to the apex if you point it too.
+# www.getpostforge.cloud {
+# 	redir https://getpostforge.cloud{uri} permanent
+# }

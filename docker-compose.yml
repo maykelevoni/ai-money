@@ -1,0 +1,36 @@
+services:
+  app:
+    build: .
+    container_name: postforge-app
+    restart: unless-stopped
+    env_file:
+      - config/.env
+    volumes:
+      - ./data:/app/data          # SQLite engine.db persists across restarts
+      - ./landers:/app/landers     # generated landing pages persist
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: postforge-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data           # TLS certs persist (avoid Let's Encrypt rate limits)
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

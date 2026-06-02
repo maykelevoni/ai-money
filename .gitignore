@@ -11,6 +11,15 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.venv-libs/
+
+# local Claude Code tooling (not part of the app)
+.claude/
+
+# local tooling / artifacts
+.playwright-mcp/
+postforge-home.png
+*.local.png
 
 # ship internals
 .ship/logs/
