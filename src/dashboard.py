@@ -1,3 +1,4 @@
+import html
 import os
 import secrets
 from datetime import datetime, timezone
@@ -8,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from src import db
+from src import config, db
 
 _COOKIE_NAME = "dash_session"
 
@@ -178,6 +179,76 @@ def _pipeline_data() -> dict:
     }
 
 
+_SETTINGS_TEMPLATE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PostForge · Settings</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Inter',-apple-system,Segoe UI,Roboto,sans-serif;background:#0b0d12;
+  color:#e8ecf4;min-height:100vh;padding:32px 16px}}
+.wrap{{max-width:640px;margin:0 auto}}
+.head{{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}}
+.logo{{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px}}
+.mark{{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#5b8cff,#7c5bff);
+  display:grid;place-items:center;color:#fff;font-weight:800}}
+.nav a{{color:#9aa3b5;font-size:14px;text-decoration:none;margin-left:18px}}
+.nav a:hover{{color:#fff}}
+.status{{border-radius:10px;padding:12px 16px;font-size:14px;margin:18px 0}}
+.status.ok{{background:rgba(39,211,159,.1);border:1px solid rgba(39,211,159,.3);color:#27d39f}}
+.status.warn{{background:rgba(255,180,60,.08);border:1px solid rgba(255,180,60,.3);color:#ffb43c}}
+.saved{{background:rgba(39,211,159,.12);border:1px solid rgba(39,211,159,.4);color:#27d39f;
+  border-radius:10px;padding:10px 16px;font-size:14px;margin-bottom:18px}}
+form{{background:#12151d;border:1px solid #232838;border-radius:16px;padding:28px}}
+.row{{margin-bottom:18px}}
+label{{display:block;font-size:13px;color:#9aa3b5;margin-bottom:7px}}
+input{{width:100%;padding:11px 13px;border-radius:9px;border:1px solid #232838;background:#0b0d12;
+  color:#e8ecf4;font-size:14px}}
+input:focus{{outline:none;border-color:#5b8cff}}
+button{{width:100%;padding:13px;border:0;border-radius:10px;font-weight:600;font-size:15px;cursor:pointer;
+  background:linear-gradient(135deg,#5b8cff,#7c5bff);color:#fff;margin-top:8px}}
+.hint{{color:#6b7280;font-size:12px;margin-top:18px;line-height:1.5}}
+</style></head><body><div class="wrap">
+  <div class="head">
+    <div class="logo"><span class="mark">P</span> PostForge Settings</div>
+    <div class="nav"><a href="/dashboard">← Dashboard</a><a href="/dashboard/logout">Logout</a></div>
+  </div>
+  {status}
+  {saved}
+  <form method="post" action="/dashboard/settings">
+    {rows}
+    <button type="submit">Save settings</button>
+  </form>
+  <p class="hint">Keys are stored in the database and used immediately — no redeploy needed.
+  Leave a saved key field blank to keep its current value.</p>
+</div></body></html>"""
+
+
+def _settings_page(saved: bool = False) -> str:
+    rows = []
+    for key, label, kind, secret in config.MANAGED_SETTINGS:
+        current = config.get_setting_value(key, "")
+        if secret:
+            placeholder = "•••••••• saved — leave blank to keep" if current else "not set"
+            value_attr, input_type = "", "password"
+        else:
+            placeholder = ""
+            value_attr = f' value="{html.escape(current, quote=True)}"'
+            input_type = "number" if kind == "number" else "text"
+        step = ' step="any"' if kind == "number" else ""
+        rows.append(
+            f'<div class="row"><label for="{key}">{html.escape(label)}</label>'
+            f'<input type="{input_type}" id="{key}" name="{key}"{value_attr}{step} '
+            f'placeholder="{placeholder}" autocomplete="off"></div>'
+        )
+    if config.is_engine_configured():
+        status = '<div class="status ok">✓ Engine configured — it can run campaigns.</div>'
+    else:
+        miss = html.escape(", ".join(config.missing_engine_keys()))
+        status = f'<div class="status warn">⏳ Engine idle — still need: {miss}</div>'
+    saved_html = '<div class="saved">✓ Settings saved.</div>' if saved else ""
+    return _SETTINGS_TEMPLATE.format(rows="".join(rows), status=status, saved=saved_html)
+
+
 def register_dashboard_routes(app: FastAPI) -> None:
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount(
@@ -229,3 +300,21 @@ def register_dashboard_routes(app: FastAPI) -> None:
         resp = RedirectResponse(url="/dashboard", status_code=303)
         resp.delete_cookie(_COOKIE_NAME)
         return resp
+
+    @app.get("/dashboard/settings", response_class=HTMLResponse)
+    async def settings_get(request: Request):
+        if not _is_authed(request):
+            return HTMLResponse(_login_page(), status_code=200)
+        saved = request.query_params.get("saved") == "1"
+        return HTMLResponse(_settings_page(saved=saved))
+
+    @app.post("/dashboard/settings")
+    async def settings_post(request: Request):
+        if not _is_authed(request):
+            return HTMLResponse(_login_page(), status_code=200)
+        form = await request.form()
+        for key, _label, _kind, _secret in config.MANAGED_SETTINGS:
+            value = (form.get(key) or "").strip()
+            if value != "":  # blank = keep existing (don't wipe saved secrets)
+                config.set_setting(key, value)
+        return RedirectResponse(url="/dashboard/settings?saved=1", status_code=303)

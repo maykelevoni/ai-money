@@ -1,11 +1,10 @@
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from dataclasses import dataclass, field
+
 from dotenv import load_dotenv
 
-# Load config/.env (the project's canonical env location, where .env.example lives
-# and SETUP.md points). Resolve relative to this file so it works from any CWD.
-# Fall back to a root .env / default upward search if config/.env is absent.
+# Load config/.env if present (local dev); otherwise rely on real env vars / DB.
 _ENV_PATH = Path(__file__).resolve().parent.parent / "config" / ".env"
 if _ENV_PATH.exists():
     load_dotenv(_ENV_PATH)
@@ -13,66 +12,60 @@ else:
     load_dotenv()
 
 
-def _require(key: str) -> str:
-    value = os.getenv(key, "").strip()
-    if not value:
-        raise RuntimeError(
-            f"Missing required environment variable: {key}\n"
-            f"Copy config/.env.example to config/.env and fill in all required values."
-        )
-    return value
-
-
-def _optional(key: str, default: str = "") -> str:
-    return os.getenv(key, default).strip()
-
-
-def _float(key: str, default: float) -> float:
-    raw = os.getenv(key, "").strip()
-    if not raw:
-        return default
+# ---------------------------------------------------------------------------
+# Value resolution: DB settings table  ->  environment variable  ->  default.
+# This lets every key be managed from the dashboard Settings page (stored in
+# the DB) with no env vars and no redeploy required.
+# ---------------------------------------------------------------------------
+def _db_get(key: str):
     try:
-        return float(raw)
-    except ValueError:
-        raise RuntimeError(f"Environment variable {key} must be a number, got: {raw!r}")
+        from src import db
+        row = db.fetchone("SELECT value FROM settings WHERE key = ?", (key,))
+        return row["value"] if row else None
+    except Exception:
+        return None
 
 
-def _int(key: str, default: int) -> int:
-    raw = os.getenv(key, "").strip()
-    if not raw:
-        return default
+def _resolve(key: str, default: str = "") -> str:
+    val = _db_get(key)
+    if val is not None and val.strip() != "":
+        return val.strip()
+    env = os.getenv(key, "")
+    if env.strip() != "":
+        return env.strip()
+    return default
+
+
+def _resolve_float(key: str, default: float) -> float:
+    raw = _resolve(key, "")
     try:
-        return int(raw)
+        return float(raw) if raw != "" else default
     except ValueError:
-        raise RuntimeError(f"Environment variable {key} must be an integer, got: {raw!r}")
+        return default
+
+
+def _resolve_int(key: str, default: int) -> int:
+    raw = _resolve(key, "")
+    try:
+        return int(raw) if raw != "" else default
+    except ValueError:
+        return default
 
 
 @dataclass
 class Settings:
-    # Traffic network
+    """Frozen config snapshot — used by tests. Runtime uses the live object below."""
     propellerads_api_key: str
-
-    # CPA networks
     mylead_api_key: str
     cpalead_affiliate_id: str
-
-    # LLM (OpenRouter — OpenAI-compatible; model is swappable via LLM_MODEL)
     openrouter_api_key: str
     llm_model: str
-
-    # Notifications
     telegram_bot_token: str
     telegram_chat_id: str
-
-    # Hosting
     domain: str
     dashboard_token: str
-
-    # Budget caps
     global_budget: float
     daily_cap: float
-
-    # Optimizer thresholds
     scale_roi: float
     kill_roi: float
     kill_spend: float
@@ -81,33 +74,116 @@ class Settings:
     min_conv: int
 
 
-def _load() -> Settings:
-    # Integration keys are OPTIONAL at boot so the public site (homepage, health,
-    # dashboard) always runs. The money-engine activates only once its keys are
-    # present — see is_engine_configured(). This decouples "site live" (needed for
-    # CPA-network approval) from "all integrations configured".
-    return Settings(
-        propellerads_api_key=_optional("PROPELLERADS_API_KEY"),
-        mylead_api_key=_optional("MYLEAD_API_KEY"),
-        cpalead_affiliate_id=_optional("CPALEAD_AFFILIATE_ID"),
-        openrouter_api_key=_optional("OPENROUTER_API_KEY"),
-        llm_model=_optional("LLM_MODEL", "google/gemini-2.0-flash-001"),
-        telegram_bot_token=_optional("TELEGRAM_BOT_TOKEN"),
-        telegram_chat_id=_optional("TELEGRAM_CHAT_ID"),
-        domain=_optional("DOMAIN", "http://localhost:8000"),
-        dashboard_token=_optional("DASHBOARD_TOKEN"),
-        global_budget=_float("GLOBAL_BUDGET", 90.0),
-        daily_cap=_float("DAILY_CAP", 10.0),
-        scale_roi=_float("SCALE_ROI", 0.20),
-        kill_roi=_float("KILL_ROI", -0.50),
-        kill_spend=_float("KILL_SPEND", 3.0),
-        min_zone_clicks=_int("MIN_ZONE_CLICKS", 50),
-        min_creative_clicks=_int("MIN_CREATIVE_CLICKS", 30),
-        min_conv=_int("MIN_CONV", 2),
+class _LiveSettings:
+    """Each attribute resolves DB -> env -> default at access time, so values
+    saved on the dashboard Settings page take effect immediately."""
+
+    @property
+    def propellerads_api_key(self) -> str:
+        return _resolve("PROPELLERADS_API_KEY")
+
+    @property
+    def mylead_api_key(self) -> str:
+        return _resolve("MYLEAD_API_KEY")
+
+    @property
+    def cpalead_affiliate_id(self) -> str:
+        return _resolve("CPALEAD_AFFILIATE_ID")
+
+    @property
+    def openrouter_api_key(self) -> str:
+        return _resolve("OPENROUTER_API_KEY")
+
+    @property
+    def llm_model(self) -> str:
+        return _resolve("LLM_MODEL", "google/gemini-2.0-flash-001")
+
+    @property
+    def telegram_bot_token(self) -> str:
+        return _resolve("TELEGRAM_BOT_TOKEN")
+
+    @property
+    def telegram_chat_id(self) -> str:
+        return _resolve("TELEGRAM_CHAT_ID")
+
+    @property
+    def domain(self) -> str:
+        return _resolve("DOMAIN", "http://localhost:8000")
+
+    @property
+    def dashboard_token(self) -> str:
+        return _resolve("DASHBOARD_TOKEN")
+
+    @property
+    def global_budget(self) -> float:
+        return _resolve_float("GLOBAL_BUDGET", 90.0)
+
+    @property
+    def daily_cap(self) -> float:
+        return _resolve_float("DAILY_CAP", 10.0)
+
+    @property
+    def scale_roi(self) -> float:
+        return _resolve_float("SCALE_ROI", 0.20)
+
+    @property
+    def kill_roi(self) -> float:
+        return _resolve_float("KILL_ROI", -0.50)
+
+    @property
+    def kill_spend(self) -> float:
+        return _resolve_float("KILL_SPEND", 3.0)
+
+    @property
+    def min_zone_clicks(self) -> int:
+        return _resolve_int("MIN_ZONE_CLICKS", 50)
+
+    @property
+    def min_creative_clicks(self) -> int:
+        return _resolve_int("MIN_CREATIVE_CLICKS", 30)
+
+    @property
+    def min_conv(self) -> int:
+        return _resolve_int("MIN_CONV", 2)
+
+
+settings = _LiveSettings()
+
+
+# ---------------------------------------------------------------------------
+# Settings managed from the dashboard. (key, label, kind, secret)
+# ---------------------------------------------------------------------------
+MANAGED_SETTINGS = [
+    ("PROPELLERADS_API_KEY", "PropellerAds API key", "password", True),
+    ("OPENROUTER_API_KEY", "OpenRouter API key", "password", True),
+    ("LLM_MODEL", "LLM model (OpenRouter id)", "text", False),
+    ("MYLEAD_API_KEY", "MyLead API key", "password", True),
+    ("CPALEAD_AFFILIATE_ID", "CPALead affiliate ID (fallback)", "text", False),
+    ("TELEGRAM_BOT_TOKEN", "Telegram bot token", "password", True),
+    ("TELEGRAM_CHAT_ID", "Telegram chat ID", "text", False),
+    ("DOMAIN", "Public domain (https://...)", "text", False),
+    ("GLOBAL_BUDGET", "Global budget cap (USD)", "number", False),
+    ("DAILY_CAP", "Daily spend cap (USD)", "number", False),
+    ("SCALE_ROI", "Scale-winner ROI threshold (e.g. 0.20)", "number", False),
+    ("KILL_ROI", "Kill-loser ROI threshold (e.g. -0.50)", "number", False),
+    ("KILL_SPEND", "Min spend before kill (USD)", "number", False),
+    ("MIN_ZONE_CLICKS", "Min zone clicks before blacklist", "number", False),
+    ("MIN_CREATIVE_CLICKS", "Min creative clicks before pause", "number", False),
+    ("MIN_CONV", "Min conversions before scaling", "number", False),
+]
+
+
+def get_setting_value(key: str, default: str = "") -> str:
+    return _resolve(key, default)
+
+
+def set_setting(key: str, value: str) -> None:
+    from src import db
+    db.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
     )
-
-
-settings = _load()
 
 
 def has_cpa() -> bool:
@@ -115,18 +191,11 @@ def has_cpa() -> bool:
 
 
 def is_engine_configured() -> bool:
-    """True when the money-engine has the keys it needs to run (traffic + LLM + a
-    CPA network). When False, the scheduler jobs idle and the public site still serves.
-    """
-    return bool(
-        settings.propellerads_api_key
-        and settings.openrouter_api_key
-        and has_cpa()
-    )
+    """True when the engine has traffic + LLM + a CPA network configured."""
+    return bool(settings.propellerads_api_key and settings.openrouter_api_key and has_cpa())
 
 
 def missing_engine_keys() -> list[str]:
-    """Human-readable list of which keys are still needed to activate the engine."""
     missing = []
     if not settings.propellerads_api_key:
         missing.append("PROPELLERADS_API_KEY")

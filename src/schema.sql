@@ -85,3 +85,9 @@ CREATE TABLE IF NOT EXISTS budget_ledger (
 CREATE INDEX IF NOT EXISTS idx_clicks_click_id             ON clicks(click_id);
 CREATE INDEX IF NOT EXISTS idx_conversions_click_id        ON conversions(click_id);
 CREATE INDEX IF NOT EXISTS idx_spend_snapshots_campaign_id ON spend_snapshots(campaign_id);
+
+-- Runtime settings (API keys, budgets, thresholds) managed from the dashboard.
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
