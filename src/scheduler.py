@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from src import budget, db, offers, optimize, report
+from src import budget, config, db, offers, optimize, report
 from src.clients import telegram, traffic
 
 logger = logging.getLogger(__name__)
@@ -31,9 +31,22 @@ def _safe(fn):
     return wrapper
 
 
+def _engine_ready(job_name: str) -> bool:
+    """Engine jobs idle (with a clear log) until their integration keys are set."""
+    if config.is_engine_configured():
+        return True
+    logger.info(
+        "%s: engine idle — waiting on keys: %s",
+        job_name, ", ".join(config.missing_engine_keys()),
+    )
+    return False
+
+
 @_safe
 def launch_job() -> None:
     """Daily: sync offers and launch a campaign when below the active-campaign target."""
+    if not _engine_ready("launch_job"):
+        return
     from src import launch  # deferred to avoid import-time side-effects from generate
 
     row = db.fetchone("SELECT COUNT(*) AS cnt FROM campaigns WHERE status = 'active'")
@@ -63,6 +76,8 @@ def launch_job() -> None:
 @_safe
 def optimize_job() -> None:
     """Every N hours: run one optimizer cycle."""
+    if not _engine_ready("optimize_job"):
+        return
     logger.info("optimize_job: starting optimizer cycle")
     optimize.run_optimizer()
 
@@ -70,6 +85,9 @@ def optimize_job() -> None:
 @_safe
 def report_job() -> None:
     """Daily at REPORT_HOUR_UTC: deliver Telegram daily report."""
+    if not config.settings.telegram_bot_token:
+        logger.info("report_job: no Telegram token configured — skipping report")
+        return
     logger.info("report_job: sending daily report")
     report.send_daily_report()
 

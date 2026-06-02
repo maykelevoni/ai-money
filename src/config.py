@@ -82,26 +82,20 @@ class Settings:
 
 
 def _load() -> Settings:
-    # At least one CPA network key must be present; both are optional individually
-    # but we need one to fetch offers.
-    mylead = _optional("MYLEAD_API_KEY")
-    cpalead = _optional("CPALEAD_AFFILIATE_ID")
-    if not mylead and not cpalead:
-        raise RuntimeError(
-            "Missing CPA network credentials: set at least one of "
-            "MYLEAD_API_KEY or CPALEAD_AFFILIATE_ID in your .env file."
-        )
-
+    # Integration keys are OPTIONAL at boot so the public site (homepage, health,
+    # dashboard) always runs. The money-engine activates only once its keys are
+    # present — see is_engine_configured(). This decouples "site live" (needed for
+    # CPA-network approval) from "all integrations configured".
     return Settings(
-        propellerads_api_key=_require("PROPELLERADS_API_KEY"),
-        mylead_api_key=mylead,
-        cpalead_affiliate_id=cpalead,
-        openrouter_api_key=_require("OPENROUTER_API_KEY"),
+        propellerads_api_key=_optional("PROPELLERADS_API_KEY"),
+        mylead_api_key=_optional("MYLEAD_API_KEY"),
+        cpalead_affiliate_id=_optional("CPALEAD_AFFILIATE_ID"),
+        openrouter_api_key=_optional("OPENROUTER_API_KEY"),
         llm_model=_optional("LLM_MODEL", "google/gemini-2.0-flash-001"),
-        telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
-        telegram_chat_id=_require("TELEGRAM_CHAT_ID"),
-        domain=_require("DOMAIN"),
-        dashboard_token=_require("DASHBOARD_TOKEN"),
+        telegram_bot_token=_optional("TELEGRAM_BOT_TOKEN"),
+        telegram_chat_id=_optional("TELEGRAM_CHAT_ID"),
+        domain=_optional("DOMAIN", "http://localhost:8000"),
+        dashboard_token=_optional("DASHBOARD_TOKEN"),
         global_budget=_float("GLOBAL_BUDGET", 90.0),
         daily_cap=_float("DAILY_CAP", 10.0),
         scale_roi=_float("SCALE_ROI", 0.20),
@@ -114,3 +108,30 @@ def _load() -> Settings:
 
 
 settings = _load()
+
+
+def has_cpa() -> bool:
+    return bool(settings.mylead_api_key or settings.cpalead_affiliate_id)
+
+
+def is_engine_configured() -> bool:
+    """True when the money-engine has the keys it needs to run (traffic + LLM + a
+    CPA network). When False, the scheduler jobs idle and the public site still serves.
+    """
+    return bool(
+        settings.propellerads_api_key
+        and settings.openrouter_api_key
+        and has_cpa()
+    )
+
+
+def missing_engine_keys() -> list[str]:
+    """Human-readable list of which keys are still needed to activate the engine."""
+    missing = []
+    if not settings.propellerads_api_key:
+        missing.append("PROPELLERADS_API_KEY")
+    if not settings.openrouter_api_key:
+        missing.append("OPENROUTER_API_KEY")
+    if not has_cpa():
+        missing.append("MYLEAD_API_KEY or CPALEAD_AFFILIATE_ID")
+    return missing
