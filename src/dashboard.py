@@ -19,12 +19,11 @@ _templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 # ============================================================================
 #  DASHBOARD PASSWORD  —  change this to whatever you want, then redeploy.
-#  No env var needed. This is the password you type on the login page.
+#  This is the ONLY thing controlling the login. No env var involved.
 # ============================================================================
 DASHBOARD_PASSWORD = "postforge"
 
-# Env var still works as an override if ever set, but the line above is all you need.
-_DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN") or DASHBOARD_PASSWORD
+_DASHBOARD_TOKEN = DASHBOARD_PASSWORD
 
 
 def _token_valid(token: str) -> bool:
