@@ -17,7 +17,14 @@ _STATIC_DIR = Path(__file__).parent / "static"
 
 _templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
-_DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN", "")
+# ============================================================================
+#  DASHBOARD PASSWORD  —  change this to whatever you want, then redeploy.
+#  No env var needed. This is the password you type on the login page.
+# ============================================================================
+DASHBOARD_PASSWORD = "postforge"
+
+# Env var still works as an override if ever set, but the line above is all you need.
+_DASHBOARD_TOKEN = os.getenv("DASHBOARD_TOKEN") or DASHBOARD_PASSWORD
 
 
 def _token_valid(token: str) -> bool:
@@ -66,9 +73,9 @@ button{width:100%;padding:12px;border:0;border-radius:10px;font-weight:600;font-
   <div class="logo"><span class="mark">P</span> PostForge</div>
   <p class="sub">Operations dashboard</p>
   <div class="err">Incorrect token — try again.</div>
-  <label for="token">Dashboard token</label>
+  <label for="token">Password</label>
   <input type="password" id="token" name="token" autocomplete="current-password"
-         autofocus placeholder="Enter your dashboard token">
+         autofocus placeholder="Enter password">
   <button type="submit">Sign in</button>
 </form></body></html>"""
 
