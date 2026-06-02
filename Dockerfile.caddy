@@ -1,0 +1,4 @@
+# Custom Caddy image with the Caddyfile baked in — avoids fragile single-file
+# bind mounts that break on managed Docker platforms (e.g. Hostinger).
+FROM caddy:2-alpine
+COPY Caddyfile /etc/caddy/Caddyfile

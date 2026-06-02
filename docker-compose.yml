@@ -3,11 +3,14 @@ services:
     build: .
     container_name: postforge-app
     restart: unless-stopped
+    # Loads config/.env locally if present; on managed platforms (Hostinger)
+    # set the same vars via the container's environment editor instead.
     env_file:
-      - config/.env
+      - path: config/.env
+        required: false
     volumes:
-      - ./data:/app/data          # SQLite engine.db persists across restarts
-      - ./landers:/app/landers     # generated landing pages persist
+      - app_data:/app/data          # SQLite engine.db persists across restarts
+      - app_landers:/app/landers     # generated landing pages persist
     expose:
       - "8000"
     healthcheck:
@@ -18,7 +21,10 @@ services:
       start_period: 15s
 
   caddy:
-    image: caddy:2-alpine
+    # Caddyfile is baked into this image (see Dockerfile.caddy) — no file mount.
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     container_name: postforge-caddy
     restart: unless-stopped
     depends_on:
@@ -27,10 +33,11 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data           # TLS certs persist (avoid Let's Encrypt rate limits)
+      - caddy_data:/data             # TLS certs persist (avoid LE rate limits)
       - caddy_config:/config
 
 volumes:
+  app_data:
+  app_landers:
   caddy_data:
   caddy_config:
