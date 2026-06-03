@@ -7,6 +7,7 @@ from src.scheduler import create_scheduler
 from src.tracker import register_tracker_routes
 from src.dashboard import register_dashboard_routes
 from src.home import register_home_routes
+from src.affiliate_routes import register_affiliate_routes
 
 
 @asynccontextmanager
@@ -25,6 +26,7 @@ app = FastAPI(title="ai-money engine", docs_url=None, redoc_url=None, lifespan=l
 register_home_routes(app)
 register_tracker_routes(app)
 register_dashboard_routes(app)
+register_affiliate_routes(app)
 
 
 @app.get("/health")
