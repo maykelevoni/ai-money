@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="30">
   <title>ai-money ops</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +19,7 @@
     <span class="live-label">LIVE</span>
   </div>
   <div class="header-right">
-    <span class="ts">{{ now }} &middot; auto-refresh every 30s</span>
+    <span class="ts">{{ now }} &middot; <a href="/dashboard" style="color:#9aa3b5;text-decoration:none">&#8635; refresh</a></span>
     <a href="/dashboard/settings" style="margin-left:18px;color:#5b8cff;text-decoration:none;font-weight:600">⚙ Settings</a>
     <a href="/dashboard/logout" style="margin-left:14px;color:#9aa3b5;text-decoration:none">Logout</a>
   </div>
@@ -59,6 +58,9 @@
   <div class="cap-alert">&#9888; Budget &ge;80% consumed &mdash; optimizer may pause all campaigns</div>
   {% endif %}
 </section>
+
+<div class="main-grid">
+<div class="col-left">
 
 <!-- CAMPAIGNS TABLE -->
 <section class="section">
@@ -111,20 +113,28 @@
 </section>
 
 <!-- PRODUCTS TO PROMOTE -->
-<section class="section">
+<section class="section panel-products">
   <h2 class="section-title">
     Products to Promote
     <span class="count-badge">{{ affiliate_products|length }}</span>
   </h2>
 
-  {% if products_saved %}
-  <div class="products-saved-notice">&#10003; Products saved.</div>
+  {% if products_result %}
+    {% if products_result.added > 0 %}
+    <div class="products-saved-notice">&#10003; {{ products_result.added }} product(s) saved{% if products_result.skipped %} &middot; {{ products_result.skipped }} already existed{% endif %}.</div>
+    {% elif products_result.skipped and not products_result.invalid %}
+    <div class="products-saved-notice">All {{ products_result.skipped }} already in the list &mdash; nothing new added.</div>
+    {% endif %}
+    {% if products_result.invalid > 0 %}
+    <div class="products-error-notice">&#9888; {{ products_result.invalid }} line(s) had no Digistore24 product ID. Use the <strong>promolink</strong> (<code>digistore24.com/redir/<b>NUMBER</b>/...</code>) or the <strong>numeric ID</strong> from the marketplace &ldquo;Promote now&rdquo; button &mdash; <u>not</u> the producer&rsquo;s sales-page link.</div>
+    {% endif %}
   {% endif %}
 
   <div class="products-intake">
     <div>
       <form method="post" action="/dashboard/products">
-        <label class="input-label" for="products-ta">Paste Digistore24 links or IDs &mdash; one per line</label>
+        <label class="input-label" for="products-ta">Paste Digistore24 <strong>promolinks</strong> or <strong>numeric IDs</strong> &mdash; one per line</label>
+        <div class="input-hint">Tip: use the <code>digistore24.com/redir/NUMBER/...</code> promolink or the ID. The producer&rsquo;s own sales-page domain won&rsquo;t work &mdash; it has no product ID.</div>
         <textarea id="products-ta" name="products" class="products-textarea"
           placeholder="https://www.digistore24.com/redir/123456/...&#10;456789&#10;https://www.digistore24.com/product/..."></textarea>
         <button type="submit" class="save-btn">Save Products</button>
@@ -140,7 +150,7 @@
         <div class="explainer-steps">
           <div class="step"><span class="step-num">1</span><span>Open <strong>digistore24.com/marketplace</strong></span></div>
           <div class="step"><span class="step-num">2</span><span>Pick products using the rules below</span></div>
-          <div class="step"><span class="step-num">3</span><span>Copy the product link or its numeric ID</span></div>
+          <div class="step"><span class="step-num">3</span><span>Click <strong>Promote now</strong> &rarr; copy the promolink (<code>.../redir/NUMBER/...</code>) or the numeric ID</span></div>
           <div class="step"><span class="step-num">4</span><span>Paste here one per line &rarr; Save</span></div>
         </div>
         <div class="cheat-section-label">Quick cheat sheet</div>
@@ -221,9 +231,9 @@
   <p class="empty" style="margin-top:16px">No products yet &mdash; paste IDs above to get started.</p>
   {% endif %}
 </section>
+</div><!-- /col-left -->
 
-<!-- BOTTOM: DECISIONS + PIPELINE -->
-<div class="bottom-grid">
+<div class="col-right">
 
   <!-- DECISIONS FEED -->
   <section class="section decisions-section">
@@ -273,7 +283,8 @@
     </div>
   </section>
 
-</div>
+</div><!-- /col-right -->
+</div><!-- /main-grid -->
 
 </body>
 </html>

@@ -167,6 +167,20 @@ def _decisions_data(limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _products_result(request: Request) -> dict | None:
+    """Parse the after-save feedback counts from the redirect query params."""
+    if "added" not in request.query_params:
+        return None
+
+    def _qint(name: str) -> int:
+        try:
+            return int(request.query_params.get(name, "0"))
+        except ValueError:
+            return 0
+
+    return {"added": _qint("added"), "invalid": _qint("invalid"), "skipped": _qint("skipped")}
+
+
 def _affiliate_products_data() -> list[dict]:
     try:
         rows = db.fetchall(
@@ -301,7 +315,7 @@ def register_dashboard_routes(app: FastAPI) -> None:
                 "decisions": _decisions_data(),
                 "pipeline": _pipeline_data(),
                 "affiliate_products": _affiliate_products_data(),
-                "products_saved": request.query_params.get("products_saved") == "1",
+                "products_result": _products_result(request),
             },
         )
         # If they arrived via ?token=, drop a cookie so future visits just work.
@@ -354,5 +368,12 @@ def register_dashboard_routes(app: FastAPI) -> None:
     ):
         _check_token(request)
         from src import affiliate_research
-        affiliate_research.add_products(products)
-        return RedirectResponse(url="/dashboard?products_saved=1", status_code=303)
+        res = affiliate_research.add_products(products)
+        return RedirectResponse(
+            url=(
+                f"/dashboard?added={res['added']}"
+                f"&invalid={res['invalid']}"
+                f"&skipped={res['skipped_existing']}"
+            ),
+            status_code=303,
+        )
