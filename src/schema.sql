@@ -91,3 +91,38 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS affiliate_products (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id      TEXT    NOT NULL UNIQUE,
+    entry_id        TEXT,
+    headline        TEXT    NOT NULL DEFAULT '',
+    language        TEXT    NOT NULL DEFAULT '',
+    currency        TEXT    NOT NULL DEFAULT '',
+    commission_pct  REAL    NOT NULL DEFAULT 0.0,
+    epc             REAL    NOT NULL DEFAULT 0.0,
+    cancel_rate     REAL    NOT NULL DEFAULT 0.0,
+    conversion_rate REAL    NOT NULL DEFAULT 0.0,
+    stars           REAL    NOT NULL DEFAULT 0.0,
+    score           REAL    NOT NULL DEFAULT 0.0,
+    stats_ok        INTEGER NOT NULL DEFAULT 0,
+    status          TEXT    NOT NULL DEFAULT 'candidate'
+                            CHECK(status IN ('candidate','testing','winner','loser','excluded','paused')),
+    rules_json      TEXT,
+    first_seen      TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_checked    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS affiliate_pages (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id     TEXT    NOT NULL REFERENCES affiliate_products(product_id),
+    slug           TEXT    NOT NULL UNIQUE,
+    title          TEXT    NOT NULL DEFAULT '',
+    file_path      TEXT    NOT NULL DEFAULT '',
+    views          INTEGER NOT NULL DEFAULT 0,
+    clicks         INTEGER NOT NULL DEFAULT 0,
+    status         TEXT    NOT NULL DEFAULT 'live'
+                           CHECK(status IN ('live','paused')),
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_aff_pages_slug ON affiliate_pages(slug);
