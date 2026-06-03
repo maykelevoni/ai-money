@@ -93,6 +93,28 @@ def report_job() -> None:
 
 
 @_safe
+def affiliate_validate_job() -> None:
+    """Every 8h: validate and enrich affiliate product candidates."""
+    if not config.has_digistore():
+        logger.info("affiliate_validate_job: idle — Digistore24 key not configured")
+        return
+    from src import affiliate_research  # deferred to avoid import-time side-effects
+    logger.info("affiliate_validate_job: starting validation + enrichment")
+    affiliate_research.validate_and_enrich()
+
+
+@_safe
+def affiliate_pagegen_job() -> None:
+    """Daily: generate promotion pages for pending affiliate products."""
+    if not config.has_digistore():
+        logger.info("affiliate_pagegen_job: idle — Digistore24 key not configured")
+        return
+    from src import affiliate_generate  # deferred to avoid import-time side-effects
+    logger.info("affiliate_pagegen_job: generating pending affiliate pages")
+    affiliate_generate.generate_pending(limit=3)
+
+
+@_safe
 def budget_guard_job() -> None:
     """Every 15m: pause all campaigns and alert if any budget cap is hit."""
     if not (budget.is_global_exhausted() or budget.is_daily_exhausted()):
@@ -154,10 +176,25 @@ def create_scheduler() -> AsyncIOScheduler:
         name=f"Budget cap guard (every {_BUDGET_GUARD_MINUTES}m)",
         misfire_grace_time=300,
     )
+    scheduler.add_job(
+        affiliate_validate_job,
+        trigger=IntervalTrigger(hours=8),
+        id="affiliate_validate_job",
+        name="Affiliate product validation + enrichment (every 8h)",
+        misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        affiliate_pagegen_job,
+        trigger=IntervalTrigger(hours=24),
+        id="affiliate_pagegen_job",
+        name="Affiliate page generation (daily)",
+        misfire_grace_time=3600,
+    )
 
     logger.info(
         "Scheduler configured: launch (daily), optimize (every %dh), "
-        "report (%02d:00 UTC daily), budget_guard (every %dm)",
+        "report (%02d:00 UTC daily), budget_guard (every %dm), "
+        "affiliate_validate (every 8h), affiliate_pagegen (daily)",
         _OPTIMIZE_HOURS, _REPORT_HOUR_UTC, _BUDGET_GUARD_MINUTES,
     )
     return scheduler
