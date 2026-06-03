@@ -146,6 +146,25 @@ class _LiveSettings:
     def min_conv(self) -> int:
         return _resolve_int("MIN_CONV", 2)
 
+    @property
+    def digistore24_api_key(self) -> str:
+        val = _resolve("DIGISTORE24_API_KEY")
+        if val:
+            return val
+        return os.getenv("DIGISTORE", "")
+
+    @property
+    def digistore24_affiliate_name(self) -> str:
+        return _resolve("DIGISTORE24_AFFILIATE_NAME", "")
+
+    @property
+    def digistore24_min_commission(self) -> float:
+        return _resolve_float("DIGISTORE24_MIN_COMMISSION", 50.0)
+
+    @property
+    def digistore24_max_cancel_rate(self) -> float:
+        return _resolve_float("DIGISTORE24_MAX_CANCEL_RATE", 15.0)
+
 
 settings = _LiveSettings()
 
@@ -170,6 +189,10 @@ MANAGED_SETTINGS = [
     ("MIN_ZONE_CLICKS", "Min zone clicks before blacklist", "number", False),
     ("MIN_CREATIVE_CLICKS", "Min creative clicks before pause", "number", False),
     ("MIN_CONV", "Min conversions before scaling", "number", False),
+    ("DIGISTORE24_API_KEY", "Digistore24 API key", "password", True),
+    ("DIGISTORE24_AFFILIATE_NAME", "Digistore24 affiliate name", "text", False),
+    ("DIGISTORE24_MIN_COMMISSION", "Digistore24 min commission % (e.g. 50)", "number", False),
+    ("DIGISTORE24_MAX_CANCEL_RATE", "Digistore24 max cancel rate % (e.g. 15)", "number", False),
 ]
 
 
@@ -184,6 +207,10 @@ def set_setting(key: str, value: str) -> None:
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (key, value),
     )
+
+
+def has_digistore() -> bool:
+    return bool(settings.digistore24_api_key)
 
 
 def has_cpa() -> bool:
