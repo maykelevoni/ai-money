@@ -1,0 +1,43 @@
+{% extends "dash_base.html" %}
+{% block title %}Activity{% endblock %}
+{% block content %}
+
+<!-- ENGINE: what it's doing right now -->
+<section class="engine-strip">
+  <span class="engine-title">Engine now</span>
+  {% if engine.paid_engine_ready %}
+  <span class="estat ok">&#9679; Paid engine running</span>
+  {% else %}
+  <span class="estat idle">&#9679; Paid engine idle &mdash; needs {{ engine.paid_missing|join(', ') }}</span>
+  {% endif %}
+  {% if engine.digistore_ready %}
+  <span class="estat ok">&#9679; Digistore connected</span>
+  {% else %}
+  <span class="estat idle">&#9679; Digistore key missing</span>
+  {% endif %}
+  <span class="estat">{{ engine.active_campaigns }} campaigns live</span>
+  <span class="estat">{{ engine.candidates }} products queued</span>
+  <span class="estat">{{ engine.pages_pending }} awaiting page</span>
+</section>
+
+<section class="section">
+  <h2 class="section-title">Activity Log <span class="count-badge">{{ activity|length }}</span></h2>
+  <p class="section-sub">Everything the system has done — products analysed, pages created, campaigns, optimizer decisions, conversions, budget.</p>
+  {% if activity %}
+  <div class="activity-feed wide">
+    {% for a in activity %}
+    <div class="activity-item">
+      <span class="act-dot act-{{ a.type }}"></span>
+      <span class="act-type-tag tag-{{ a.type }}">{{ a.type }}</span>
+      <div class="act-body">
+        <div class="act-msg">{{ a.msg }}</div>
+      </div>
+      <div class="act-ts mono dim">{{ a.ts }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Nothing yet &mdash; activity will appear here as the engine analyses products, builds pages, and runs campaigns.</p>
+  {% endif %}
+</section>
+{% endblock %}

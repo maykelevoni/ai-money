@@ -1,287 +1,189 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ai-money ops</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/dash-static/dashboard.css">
-</head>
-<body>
+{% extends "dash_base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
 
-<!-- HEADER -->
-<header class="header">
-  <div class="header-left">
-    <span class="logo">ai-money</span>
-    <span class="live-dot"></span>
-    <span class="live-label">LIVE</span>
-  </div>
-  <div class="header-right">
-    <span class="ts">{{ now }} &middot; <a href="/dashboard" style="color:#9aa3b5;text-decoration:none">&#8635; refresh</a></span>
-    <a href="/dashboard/settings" style="margin-left:18px;color:#5b8cff;text-decoration:none;font-weight:600">⚙ Settings</a>
-    <a href="/dashboard/logout" style="margin-left:14px;color:#9aa3b5;text-decoration:none">Logout</a>
-  </div>
-</header>
+<!-- KPI ROW -->
+<section class="kpi-row">
+  <div class="kpi"><span class="kpi-label">Funded</span><span class="kpi-value">${{ "%.2f"|format(kpi.funded) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Spent</span><span class="kpi-value">${{ "%.2f"|format(kpi.spent) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Remaining</span><span class="kpi-value{% if budget.near_cap %} danger{% endif %}">${{ "%.2f"|format(kpi.remaining) }}</span></div>
+  <div class="kpi"><span class="kpi-label">Active Campaigns</span><span class="kpi-value">{{ kpi.active_campaigns }}</span></div>
+  <div class="kpi"><span class="kpi-label">Products</span><span class="kpi-value">{{ kpi.products }}</span></div>
+  <div class="kpi"><span class="kpi-label">Live Pages</span><span class="kpi-value">{{ kpi.pages_live }}</span></div>
+  <div class="kpi"><span class="kpi-label">Conversions</span><span class="kpi-value{% if kpi.conversions %} positive{% endif %}">{{ kpi.conversions }}</span></div>
+</section>
 
-<!-- BUDGET -->
-<section class="section budget-section">
-  <h2 class="section-title">Global Budget</h2>
+<!-- BUDGET PROGRESS -->
+<div class="budget-strip">
   <div class="budget-bar-wrap">
-    <div class="budget-bar-fill{% if budget.near_cap %} near-cap{% endif %}"
-         style="width: {{ budget.pct }}%"></div>
+    <div class="budget-bar-fill{% if budget.near_cap %} near-cap{% endif %}" style="width: {{ budget.pct }}%"></div>
   </div>
-  <div class="budget-metrics">
-    <div class="metric">
-      <span class="metric-label">Funded</span>
-      <span class="metric-value">${{ "%.2f"|format(budget.funded) }}</span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Spent</span>
-      <span class="metric-value{% if budget.near_cap %} danger{% endif %}">${{ "%.2f"|format(budget.spent) }}</span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Remaining</span>
-      <span class="metric-value{% if budget.near_cap %} danger{% endif %}">${{ "%.2f"|format(budget.remaining) }}</span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Cap</span>
-      <span class="metric-value">${{ "%.2f"|format(budget.cap) }}</span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Used</span>
-      <span class="metric-value{% if budget.near_cap %} danger{% endif %}">{{ budget.pct }}%</span>
-    </div>
-  </div>
-  {% if budget.near_cap %}
-  <div class="cap-alert">&#9888; Budget &ge;80% consumed &mdash; optimizer may pause all campaigns</div>
+  <span class="budget-strip-label">${{ "%.2f"|format(budget.spent) }} / ${{ "%.2f"|format(budget.cap) }} budget &middot; {{ budget.pct }}% used</span>
+</div>
+
+<!-- ENGINE STATUS -->
+<section class="engine-strip">
+  <span class="engine-title">Engine</span>
+  {% if engine.paid_engine_ready %}
+  <span class="estat ok">&#9679; Paid engine running</span>
+  {% else %}
+  <span class="estat idle">&#9679; Paid engine idle &mdash; needs {{ engine.paid_missing|join(', ') }}</span>
   {% endif %}
+  {% if engine.digistore_ready %}
+  <span class="estat ok">&#9679; Digistore connected</span>
+  {% else %}
+  <span class="estat idle">&#9679; Digistore key missing</span>
+  {% endif %}
+  <span class="estat">{{ engine.active_campaigns }} campaigns live</span>
+  <span class="estat">{{ engine.candidates }} products queued</span>
+  <span class="estat">{{ engine.pages_pending }} awaiting page</span>
 </section>
 
 <div class="main-grid">
 <div class="col-left">
 
-<!-- CAMPAIGNS TABLE -->
-<section class="section">
-  <h2 class="section-title">
-    Campaigns
-    <span class="count-badge">{{ campaigns|length }}</span>
-  </h2>
-  {% if campaigns %}
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Offer</th>
-          <th>Status</th>
-          <th class="num">Spend</th>
-          <th class="num">Revenue</th>
-          <th class="num">ROI%</th>
-          <th class="num">Conv</th>
-          <th class="num">Daily Cap</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in campaigns %}
-        <tr class="{% if c.profitable %}profitable-row{% endif %}">
-          <td class="mono dim">{{ c.id }}</td>
-          <td class="offer-name">{{ c.offer_name }}</td>
-          <td><span class="status-badge status-{{ c.status }}">{{ c.status }}</span></td>
-          <td class="num mono">${{ "%.2f"|format(c.spend) }}</td>
-          <td class="num mono">${{ "%.2f"|format(c.revenue) }}</td>
-          <td class="num mono{% if c.roi > 0 %} positive{% elif c.roi < -20 %} danger{% endif %}">
-            {% if c.roi > 0 %}+{% endif %}{{ c.roi }}%
-          </td>
-          <td class="num mono">{{ c.conversions }}</td>
-          <td class="num mono">${{ "%.2f"|format(c.daily_cap) }}</td>
-          <td class="badge-cell">
-            {% if c.profitable %}
-            <span class="scale-badge">SCALE ME</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <p class="empty">No campaigns yet &mdash; engine will launch one on the next scheduled run.</p>
-  {% endif %}
-</section>
+  <!-- PRODUCTS TO PROMOTE -->
+  <section class="section panel-products" id="products">
+    <h2 class="section-title">Products to Promote <span class="count-badge">{{ affiliate_products|length }}</span></h2>
 
-<!-- PRODUCTS TO PROMOTE -->
-<section class="section panel-products">
-  <h2 class="section-title">
-    Products to Promote
-    <span class="count-badge">{{ affiliate_products|length }}</span>
-  </h2>
-
-  {% if products_result %}
-    {% if products_result.added > 0 %}
-    <div class="products-saved-notice">&#10003; {{ products_result.added }} product(s) saved{% if products_result.skipped %} &middot; {{ products_result.skipped }} already existed{% endif %}.</div>
-    {% elif products_result.skipped and not products_result.invalid %}
-    <div class="products-saved-notice">All {{ products_result.skipped }} already in the list &mdash; nothing new added.</div>
+    {% if products_result %}
+      {% if products_result.added > 0 %}
+      <div class="products-saved-notice">&#10003; {{ products_result.added }} product(s) saved{% if products_result.skipped %} &middot; {{ products_result.skipped }} already existed{% endif %}.</div>
+      {% elif products_result.skipped and not products_result.invalid %}
+      <div class="products-saved-notice">All {{ products_result.skipped }} already in the list &mdash; nothing new added.</div>
+      {% endif %}
+      {% if products_result.invalid > 0 %}
+      <div class="products-error-notice">&#9888; {{ products_result.invalid }} line(s) had no Digistore24 product ID. Use the <strong>promolink</strong> (<code>digistore24.com/redir/<b>NUMBER</b>/...</code>) or the <strong>numeric ID</strong> from the marketplace &ldquo;Promote now&rdquo; button &mdash; <u>not</u> the producer&rsquo;s sales-page link.</div>
+      {% endif %}
     {% endif %}
-    {% if products_result.invalid > 0 %}
-    <div class="products-error-notice">&#9888; {{ products_result.invalid }} line(s) had no Digistore24 product ID. Use the <strong>promolink</strong> (<code>digistore24.com/redir/<b>NUMBER</b>/...</code>) or the <strong>numeric ID</strong> from the marketplace &ldquo;Promote now&rdquo; button &mdash; <u>not</u> the producer&rsquo;s sales-page link.</div>
-    {% endif %}
-  {% endif %}
 
-  <div class="products-intake">
-    <div>
-      <form method="post" action="/dashboard/products">
-        <label class="input-label" for="products-ta">Paste Digistore24 <strong>promolinks</strong> or <strong>numeric IDs</strong> &mdash; one per line</label>
-        <div class="input-hint">Tip: use the <code>digistore24.com/redir/NUMBER/...</code> promolink or the ID. The producer&rsquo;s own sales-page domain won&rsquo;t work &mdash; it has no product ID.</div>
-        <textarea id="products-ta" name="products" class="products-textarea"
-          placeholder="https://www.digistore24.com/redir/123456/...&#10;456789&#10;https://www.digistore24.com/product/..."></textarea>
-        <button type="submit" class="save-btn">Save Products</button>
-      </form>
-    </div>
+    <div class="products-intake">
+      <div>
+        <form method="post" action="/dashboard/products">
+          <label class="input-label" for="products-ta">Paste Digistore24 <strong>promolinks</strong> or <strong>numeric IDs</strong> &mdash; one per line</label>
+          <div class="input-hint">Tip: use the <code>digistore24.com/redir/NUMBER/...</code> promolink or the ID. The producer&rsquo;s own sales-page domain won&rsquo;t work &mdash; it has no product ID.</div>
+          <textarea id="products-ta" name="products" class="products-textarea"
+            placeholder="https://www.digistore24.com/redir/123456/...&#10;456789&#10;https://www.digistore24.com/product/..."></textarea>
+          <button type="submit" class="save-btn">Save Products</button>
+        </form>
+      </div>
 
-    <div class="explainer">
-      <div class="explainer-title">How to pick products</div>
-      <div class="explainer-body">
-        <div class="explainer-steps">
-          <div class="step"><span class="step-num">1</span><span>Open <strong>digistore24.com/marketplace</strong></span></div>
-          <div class="step"><span class="step-num">2</span><span>Pick products using the rules below</span></div>
-          <div class="step"><span class="step-num">3</span><span>Click <strong>Promote now</strong> &rarr; copy the promolink (<code>.../redir/NUMBER/...</code>) or the numeric ID</span></div>
-          <div class="step"><span class="step-num">4</span><span>Paste here one per line &rarr; Save</span></div>
-        </div>
-        <div class="cheat-section-label">Quick cheat sheet</div>
-        <div class="cheat-grid">
-          <div class="cheat-good">
-            <div class="cheat-subtitle">&#10003; Pick it if</div>
-            <ul>
-              <li>Commission 50%+</li>
-              <li>Cancel rate &lt;10%</li>
-              <li>Auto-approves affiliates</li>
-              <li>Price $30&ndash;$90</li>
-              <li>Has real sales history</li>
-            </ul>
+      <div class="explainer">
+        <div class="explainer-title">How to pick products</div>
+        <div class="explainer-body">
+          <div class="explainer-steps">
+            <div class="step"><span class="step-num">1</span><span>Open <strong>digistore24.com/marketplace</strong></span></div>
+            <div class="step"><span class="step-num">2</span><span>Pick products using the rules below</span></div>
+            <div class="step"><span class="step-num">3</span><span>Click <strong>Promote now</strong> &rarr; copy the promolink (<code>.../redir/NUMBER/...</code>) or the numeric ID</span></div>
+            <div class="step"><span class="step-num">4</span><span>Paste here one per line &rarr; Save</span></div>
           </div>
-          <div class="cheat-bad">
-            <div class="cheat-subtitle">&#10007; Skip it if</div>
-            <ul>
-              <li>Cancel rate &gt;15%</li>
-              <li>Needs manual approval</li>
-              <li>Price $300+</li>
-              <li>Scammy claims</li>
-              <li>Gambling / adult / crypto</li>
-            </ul>
+          <div class="cheat-section-label">Quick cheat sheet</div>
+          <div class="cheat-grid">
+            <div class="cheat-good">
+              <div class="cheat-subtitle">&#10003; Pick it if</div>
+              <ul><li>Commission 50%+</li><li>Cancel rate &lt;10%</li><li>Auto-approves affiliates</li><li>Price $30&ndash;$90</li><li>Has real sales history</li></ul>
+            </div>
+            <div class="cheat-bad">
+              <div class="cheat-subtitle">&#10007; Skip it if</div>
+              <ul><li>Cancel rate &gt;15%</li><li>Needs manual approval</li><li>Price $300+</li><li>Scammy claims</li><li>Gambling / adult / crypto</li></ul>
+            </div>
           </div>
+          <div class="cheat-niches">Best niches: weight loss &middot; health &middot; survival &middot; beauty &middot; spirituality &middot; clean make-money</div>
         </div>
-        <div class="cheat-niches">Best niches: weight loss &middot; health &middot; survival &middot; beauty &middot; spirituality &middot; clean make-money</div>
       </div>
     </div>
-  </div>
 
-  {% if affiliate_products %}
-  <div class="table-wrap" style="margin-top:20px">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Product ID</th>
-          <th>Headline</th>
-          <th>Status</th>
-          <th class="num">Comm%</th>
-          <th class="num">Cancel%</th>
-          <th class="num">Score</th>
-          <th>Page</th>
-          <th>Stats</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in affiliate_products %}
-        <tr>
-          <td class="mono dim">{{ p.id }}</td>
-          <td class="mono">{{ p.product_id }}</td>
-          <td class="offer-name">{{ p.headline or '—' }}</td>
-          <td><span class="status-badge status-{{ p.status }}">{{ p.status }}</span></td>
-          <td class="num mono">{% if p.commission_pct %}{{ "%.0f"|format(p.commission_pct) }}%{% else %}&mdash;{% endif %}</td>
-          <td class="num mono{% if p.cancel_rate and p.cancel_rate > 15 %} danger{% endif %}">{% if p.cancel_rate %}{{ "%.1f"|format(p.cancel_rate) }}%{% else %}&mdash;{% endif %}</td>
-          <td class="num mono">{% if p.score %}{{ "%.3f"|format(p.score) }}{% else %}&mdash;{% endif %}</td>
-          <td>
-            {% if p.page_slug %}
-            <a href="/p/{{ p.page_slug }}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:11px">{{ p.page_slug }}</a>
-            <span class="status-badge status-{{ p.page_status }}" style="margin-left:4px">{{ p.page_status }}</span>
-            {% else %}
-            <span class="dim" style="font-size:11px">&mdash;</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if not p.stats_ok %}
-            <span class="stats-unavail-tag">live test</span>
-            {% else %}
-            <span class="dim" style="font-size:10px">ok</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <p class="empty" style="margin-top:16px">No products yet &mdash; paste IDs above to get started.</p>
-  {% endif %}
-</section>
+    {% if affiliate_products %}
+    <div class="table-wrap" style="margin-top:20px">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Product ID</th><th>Headline</th><th>Status</th><th class="num">Comm%</th><th class="num">Cancel%</th><th class="num">Score</th><th>Page</th><th>Stats</th></tr></thead>
+        <tbody>
+          {% for p in affiliate_products %}
+          <tr>
+            <td class="mono dim">{{ p.id }}</td>
+            <td class="mono">{{ p.product_id }}</td>
+            <td class="offer-name">{{ p.headline or '—' }}</td>
+            <td><span class="status-badge status-{{ p.status }}">{{ p.status }}</span></td>
+            <td class="num mono">{% if p.commission_pct %}{{ "%.0f"|format(p.commission_pct) }}%{% else %}—{% endif %}</td>
+            <td class="num mono{% if p.cancel_rate and p.cancel_rate > 15 %} danger{% endif %}">{% if p.cancel_rate %}{{ "%.1f"|format(p.cancel_rate) }}%{% else %}—{% endif %}</td>
+            <td class="num mono">{% if p.score %}{{ "%.3f"|format(p.score) }}{% else %}—{% endif %}</td>
+            <td>{% if p.page_slug %}<a href="/p/{{ p.page_slug }}" target="_blank" class="link-blue">{{ p.page_slug }}</a> <span class="status-badge status-{{ p.page_status }}">{{ p.page_status }}</span>{% else %}<span class="dim">—</span>{% endif %}</td>
+            <td>{% if not p.stats_ok %}<span class="stats-unavail-tag">live test</span>{% else %}<span class="dim" style="font-size:10px">ok</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty" style="margin-top:16px">No products yet &mdash; paste IDs above to get started.</p>
+    {% endif %}
+  </section>
+
+  <!-- CAMPAIGNS -->
+  <section class="section" id="campaigns">
+    <h2 class="section-title">Campaigns <span class="count-badge">{{ campaigns|length }}</span></h2>
+    {% if campaigns %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>#</th><th>Offer</th><th>Status</th><th class="num">Spend</th><th class="num">Revenue</th><th class="num">ROI%</th><th class="num">Conv</th><th class="num">Daily Cap</th><th></th></tr></thead>
+        <tbody>
+          {% for c in campaigns %}
+          <tr class="{% if c.profitable %}profitable-row{% endif %}">
+            <td class="mono dim">{{ c.id }}</td>
+            <td class="offer-name">{{ c.offer_name }}</td>
+            <td><span class="status-badge status-{{ c.status }}">{{ c.status }}</span></td>
+            <td class="num mono">${{ "%.2f"|format(c.spend) }}</td>
+            <td class="num mono">${{ "%.2f"|format(c.revenue) }}</td>
+            <td class="num mono{% if c.roi > 0 %} positive{% elif c.roi < -20 %} danger{% endif %}">{% if c.roi > 0 %}+{% endif %}{{ c.roi }}%</td>
+            <td class="num mono">{{ c.conversions }}</td>
+            <td class="num mono">${{ "%.2f"|format(c.daily_cap) }}</td>
+            <td class="badge-cell">{% if c.profitable %}<span class="scale-badge">SCALE ME</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">No campaigns yet &mdash; engine will launch one on the next scheduled run.</p>
+    {% endif %}
+  </section>
+
 </div><!-- /col-left -->
 
 <div class="col-right">
-
-  <!-- DECISIONS FEED -->
-  <section class="section decisions-section">
-    <h2 class="section-title">Optimizer Decisions</h2>
-    {% if decisions %}
-    <div class="decisions-feed">
-      {% for d in decisions %}
-      <div class="decision-item">
-        <div class="decision-meta">
-          <span class="mono dim decision-ts">{{ d.ts }}</span>
-          <span class="action-chip action-{{ d.action }}">{{ d.action }}</span>
-          <span class="dim">{{ d.scope }} #{{ d.target_id }}</span>
-        </div>
-        <div class="decision-reason">{{ d.reason }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="empty">No decisions yet &mdash; optimizer has not run.</p>
-    {% endif %}
-  </section>
 
   <!-- OFFER PIPELINE -->
   <section class="section pipeline-section">
     <h2 class="section-title">Offer Pipeline</h2>
     <div class="pipeline-chips">
-      <div class="pipeline-chip chip-candidate">
-        <span class="chip-count">{{ pipeline.candidate }}</span>
-        <span class="chip-label">Candidate</span>
-      </div>
-      <div class="pipeline-chip chip-testing">
-        <span class="chip-count">{{ pipeline.testing }}</span>
-        <span class="chip-label">Testing</span>
-      </div>
-      <div class="pipeline-chip chip-winner">
-        <span class="chip-count">{{ pipeline.winner }}</span>
-        <span class="chip-label">Winner</span>
-      </div>
-      <div class="pipeline-chip chip-loser">
-        <span class="chip-count">{{ pipeline.loser }}</span>
-        <span class="chip-label">Loser</span>
-      </div>
-      <div class="pipeline-chip chip-excluded">
-        <span class="chip-count">{{ pipeline.excluded }}</span>
-        <span class="chip-label">Excluded</span>
-      </div>
+      <div class="pipeline-chip chip-candidate"><span class="chip-count">{{ pipeline.candidate }}</span><span class="chip-label">Candidate</span></div>
+      <div class="pipeline-chip chip-testing"><span class="chip-count">{{ pipeline.testing }}</span><span class="chip-label">Testing</span></div>
+      <div class="pipeline-chip chip-winner"><span class="chip-count">{{ pipeline.winner }}</span><span class="chip-label">Winner</span></div>
+      <div class="pipeline-chip chip-loser"><span class="chip-count">{{ pipeline.loser }}</span><span class="chip-label">Loser</span></div>
+      <div class="pipeline-chip chip-excluded"><span class="chip-count">{{ pipeline.excluded }}</span><span class="chip-label">Excluded</span></div>
     </div>
+  </section>
+
+  <!-- RECENT ACTIVITY -->
+  <section class="section">
+    <h2 class="section-title">Recent Activity <a href="/dashboard/activity" class="section-link">View all &rarr;</a></h2>
+    {% if activity %}
+    <div class="activity-feed">
+      {% for a in activity %}
+      <div class="activity-item">
+        <span class="act-dot act-{{ a.type }}"></span>
+        <div class="act-body">
+          <div class="act-msg">{{ a.msg }}</div>
+          <div class="act-ts mono dim">{{ a.ts }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">Nothing yet &mdash; activity will appear as the engine works.</p>
+    {% endif %}
   </section>
 
 </div><!-- /col-right -->
 </div><!-- /main-grid -->
-
-</body>
-</html>
+{% endblock %}

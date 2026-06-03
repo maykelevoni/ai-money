@@ -220,6 +220,95 @@ def _pipeline_data() -> dict:
     }
 
 
+def _count(sql: str, params: tuple = ()) -> int:
+    try:
+        row = db.fetchone(sql, params)
+        return int(list(row)[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def _kpi_data() -> dict:
+    b = _budget_data()
+    return {
+        "funded": b["funded"],
+        "spent": b["spent"],
+        "remaining": b["remaining"],
+        "active_campaigns": _count("SELECT COUNT(*) FROM campaigns WHERE status='active'"),
+        "products": _count("SELECT COUNT(*) FROM affiliate_products"),
+        "pages_live": _count("SELECT COUNT(*) FROM affiliate_pages WHERE status='live'"),
+        "conversions": _count("SELECT COUNT(*) FROM conversions"),
+    }
+
+
+def _engine_status() -> dict:
+    """What the engine is configured for / waiting on — the 'what it's doing' panel."""
+    return {
+        "paid_engine_ready": config.is_engine_configured(),
+        "paid_missing": config.missing_engine_keys(),
+        "digistore_ready": config.has_digistore(),
+        "active_campaigns": _count("SELECT COUNT(*) FROM campaigns WHERE status='active'"),
+        "candidates": _count("SELECT COUNT(*) FROM affiliate_products WHERE status='candidate'"),
+        "pages_pending": _count(
+            "SELECT COUNT(*) FROM affiliate_products ap "
+            "LEFT JOIN affiliate_pages pg ON pg.product_id = ap.product_id "
+            "WHERE ap.status='candidate' AND pg.id IS NULL"
+        ),
+    }
+
+
+def _pages_data() -> list[dict]:
+    try:
+        rows = db.fetchall(
+            """
+            SELECT pg.slug, pg.title, pg.status, pg.views, pg.clicks, pg.created_at,
+                   ap.product_id, ap.headline, ap.status AS product_status
+            FROM affiliate_pages pg
+            LEFT JOIN affiliate_products ap ON ap.product_id = pg.product_id
+            ORDER BY pg.created_at DESC, pg.id DESC
+            """
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def _activity_data(limit: int = 100) -> list[dict]:
+    """Unified timeline of everything the system has done, newest first."""
+    ev: list[tuple] = []
+
+    def add(ts, kind, msg, tag=""):
+        if ts:
+            ev.append((str(ts), kind, msg, tag))
+
+    try:
+        for r in db.fetchall("SELECT product_id, headline, first_seen, last_checked, status, stats_ok FROM affiliate_products"):
+            label = r["headline"] or r["product_id"]
+            add(r["first_seen"], "product", f"Product added — {label}", "added")
+            if r["last_checked"]:
+                if r["status"] == "excluded":
+                    add(r["last_checked"], "validate", f"Product excluded — {label}", "excluded")
+                elif r["stats_ok"]:
+                    add(r["last_checked"], "validate", f"Product validated — {label}", "ok")
+                else:
+                    add(r["last_checked"], "validate", f"Stats unavailable, will live-test — {label}", "pending")
+        for r in db.fetchall("SELECT slug, created_at FROM affiliate_pages"):
+            add(r["created_at"], "page", f"Page generated — /p/{r['slug']}", "live")
+        for r in db.fetchall("SELECT id, created_at, status FROM campaigns"):
+            add(r["created_at"], "campaign", f"Campaign #{r['id']} — {r['status']}", r["status"])
+        for r in db.fetchall("SELECT ts, action, scope, target_id, reason FROM decisions ORDER BY id DESC LIMIT 150"):
+            add(r["ts"], "decision", f"{r['action'].upper()} {r['scope']} #{r['target_id']} — {r['reason']}", r["action"])
+        for r in db.fetchall("SELECT ts, payout FROM conversions ORDER BY id DESC LIMIT 80"):
+            add(r["ts"], "conversion", f"Conversion +${float(r['payout']):.2f}", "win")
+        for r in db.fetchall("SELECT ts, amount, kind FROM budget_ledger ORDER BY id DESC LIMIT 80"):
+            add(r["ts"], "budget", f"{str(r['kind']).title()} ${float(r['amount']):.2f}", r["kind"])
+    except Exception:
+        pass
+
+    ev.sort(key=lambda e: e[0], reverse=True)
+    return [{"ts": t, "type": k, "msg": m, "tag": g} for (t, k, m, g) in ev[:limit]]
+
+
 _SETTINGS_TEMPLATE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PostForge · Settings</title>
@@ -309,10 +398,13 @@ def register_dashboard_routes(app: FastAPI) -> None:
             request,
             "dashboard.html",
             {
+                "active": "overview",
                 "now": now,
+                "kpi": _kpi_data(),
+                "engine": _engine_status(),
                 "budget": _budget_data(),
                 "campaigns": _campaigns_data(),
-                "decisions": _decisions_data(),
+                "activity": _activity_data(12),
                 "pipeline": _pipeline_data(),
                 "affiliate_products": _affiliate_products_data(),
                 "products_result": _products_result(request),
@@ -326,6 +418,26 @@ def register_dashboard_routes(app: FastAPI) -> None:
                 samesite="lax", max_age=60 * 60 * 24 * 30,
             )
         return resp
+
+    @app.get("/dashboard/pages", response_class=HTMLResponse)
+    async def dashboard_pages_view(request: Request) -> HTMLResponse:
+        if not _is_authed(request):
+            return HTMLResponse(_login_page(), status_code=200)
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return _templates.TemplateResponse(
+            request, "dashboard_pages.html",
+            {"active": "pages", "now": now, "pages": _pages_data()},
+        )
+
+    @app.get("/dashboard/activity", response_class=HTMLResponse)
+    async def dashboard_activity_view(request: Request) -> HTMLResponse:
+        if not _is_authed(request):
+            return HTMLResponse(_login_page(), status_code=200)
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return _templates.TemplateResponse(
+            request, "dashboard_activity.html",
+            {"active": "activity", "now": now, "activity": _activity_data(), "engine": _engine_status()},
+        )
 
     @app.post("/dashboard/login")
     async def dashboard_login(token: str = Form("")):

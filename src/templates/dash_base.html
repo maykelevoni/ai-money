@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ai-money · {% block title %}Overview{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dash-static/dashboard.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="logo">ai-money</span>
+    <span class="live-dot"></span>
+    <span class="live-label">LIVE</span>
+  </div>
+  <nav class="topnav">
+    <a href="/dashboard" class="navlink{% if active == 'overview' %} active{% endif %}">Overview</a>
+    <a href="/dashboard#products" class="navlink">Products</a>
+    <a href="/dashboard#campaigns" class="navlink">Campaigns</a>
+    <a href="/dashboard/pages" class="navlink{% if active == 'pages' %} active{% endif %}">Pages</a>
+    <a href="/dashboard/activity" class="navlink{% if active == 'activity' %} active{% endif %}">Activity</a>
+  </nav>
+  <div class="topbar-actions">
+    <span class="ts">{{ now }} &middot; <a href="{{ request.url.path }}" class="refresh-link">&#8635;</a></span>
+    <a href="/dashboard/settings" class="action-link accent">&#9881; Settings</a>
+    <a href="/dashboard/logout" class="action-link">Logout</a>
+  </div>
+</header>
+
+<main class="content">
+{% block content %}{% endblock %}
+</main>
+
+</body>
+</html>
