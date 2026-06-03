@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ meta_desc }}">
+  <link rel="canonical" href="/p/{{ slug }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Review",
+        "name": {{ title | tojson }},
+        "description": {{ meta_desc | tojson }},
+        "reviewBody": {{ verdict | default('') | tojson }},
+        "datePublished": {{ created_at | default('') | tojson }},
+        "reviewRating": {
+          "@type": "Rating",
+          "ratingValue": "{{ rating | default(0) | round(1) }}",
+          "bestRating": "5",
+          "worstRating": "1"
+        },
+        "author": {
+          "@type": "Organization",
+          "name": "Expert Review Team"
+        },
+        "itemReviewed": {
+          "@type": "Product",
+          "name": {{ h1 | tojson }}
+        }
+      }{% if faq is defined and faq %},
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {% for item in faq -%}
+          {
+            "@type": "Question",
+            "name": {{ item.q | tojson }},
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": {{ item.a | tojson }}
+            }
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ]
+      }{% endif %}
+    ]
+  }
+  </script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+    body{
+      font-family:'Inter',system-ui,-apple-system,sans-serif;
+      background:#FFFFFF;
+      color:#1E293B;
+      font-size:16px;
+      line-height:1.6;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    /* ── Disclosure bar ── */
+    .disclosure-bar{
+      background:#FEF3C7;
+      border-bottom:1px solid #FDE68A;
+      padding:.5rem 1.25rem;
+      text-align:center;
+      font-size:.8rem;
+      color:#92400E;
+      font-weight:500;
+    }
+    .disclosure-bar a{color:#78350F}
+
+    /* ── Page wrapper ── */
+    .page-wrap{
+      max-width:720px;
+      margin:0 auto;
+      padding:0 1.25rem;
+    }
+
+    /* ── Header ── */
+    .page-header{
+      padding:2rem 0 1.5rem;
+      border-bottom:1px solid #E2E8F0;
+    }
+    .review-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:.4rem;
+      background:#DCFCE7;
+      color:#15803D;
+      font-size:.72rem;
+      font-weight:700;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+      padding:.3rem .8rem;
+      border-radius:100px;
+      margin-bottom:1rem;
+    }
+    .review-badge::before{
+      content:'';
+      width:6px;height:6px;
+      border-radius:50%;
+      background:#16A34A;
+      flex-shrink:0;
+    }
+    h1{
+      font-size:clamp(1.5rem,5vw,2rem);
+      font-weight:800;
+      line-height:1.15;
+      letter-spacing:-.03em;
+      color:#0F172A;
+      margin-bottom:.75rem;
+    }
+    .header-meta{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:.4rem 1rem;
+      font-size:.82rem;
+      color:#64748B;
+      margin-top:.75rem;
+    }
+    .header-meta strong{color:#475569}
+
+    /* ── Star rating ── */
+    .rating-row{
+      display:flex;
+      align-items:center;
+      gap:.65rem;
+      margin:.5rem 0;
+    }
+    .stars{
+      position:relative;
+      display:inline-block;
+      font-size:1.3rem;
+      line-height:1;
+      letter-spacing:2px;
+    }
+    .stars-empty{color:#D1D5DB}
+    .stars-filled{
+      position:absolute;
+      top:0;left:0;
+      overflow:hidden;
+      white-space:nowrap;
+      color:#F59E0B;
+    }
+    .rating-score{font-size:1.2rem;font-weight:800;color:#0F172A}
+    .rating-label{
+      font-size:.78rem;
+      font-weight:600;
+      color:#64748B;
+      padding:.2rem .55rem;
+      background:#F1F5F9;
+      border-radius:6px;
+    }
+
+    /* ── Hero image ── */
+    .hero-img-wrap{margin:1.5rem 0}
+    .hero-img{
+      width:100%;
+      height:300px;
+      object-fit:cover;
+      border-radius:12px;
+      display:block;
+    }
+    @media(max-width:600px){.hero-img{height:200px}}
+
+    /* ── Quick Verdict card ── */
+    .verdict-card{
+      background:#F0FDF4;
+      border:1px solid #BBF7D0;
+      border-left:4px solid #16A34A;
+      border-radius:12px;
+      padding:1.5rem;
+      margin:1.75rem 0;
+    }
+    .vc-top{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:1rem;
+      margin-bottom:.9rem;
+    }
+    .vc-label{
+      font-size:.72rem;
+      font-weight:700;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+      color:#15803D;
+      margin-bottom:.4rem;
+    }
+    .verdict-score-block{
+      text-align:center;
+      flex-shrink:0;
+      padding:.25rem .75rem;
+      background:#FFFFFF;
+      border:1px solid #BBF7D0;
+      border-radius:8px;
+    }
+    .verdict-score-num{
+      display:block;
+      font-size:2rem;
+      font-weight:800;
+      color:#15803D;
+      line-height:1;
+    }
+    .verdict-score-denom{font-size:.75rem;color:#6B7280;font-weight:500}
+    .verdict-card p{
+      font-size:.95rem;
+      color:#374151;
+      line-height:1.65;
+      margin-bottom:1.25rem;
+    }
+
+    /* ── CTA button ── */
+    .cta-btn{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:.5rem;
+      width:100%;
+      min-height:54px;
+      padding:.9rem 1.5rem;
+      background:#16A34A;
+      color:#FFFFFF;
+      font-family:inherit;
+      font-size:1.05rem;
+      font-weight:700;
+      text-align:center;
+      text-decoration:none;
+      border-radius:10px;
+      border:none;
+      cursor:pointer;
+      box-shadow:0 4px 14px rgba(22,163,74,.3);
+      transition:background .15s,transform .15s,box-shadow .15s;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .cta-btn:hover,.cta-btn:focus{
+      background:#15803D;
+      transform:translateY(-1px);
+      box-shadow:0 6px 20px rgba(22,163,74,.45);
+      outline:none;
+    }
+    .cta-btn:active{transform:translateY(0)}
+    .cta-arrow{font-size:1.1rem;transition:transform .15s}
+    .cta-btn:hover .cta-arrow{transform:translateX(3px)}
+
+    /* ── Content sections ── */
+    .content-section{
+      padding:2rem 0;
+      border-bottom:1px solid #F1F5F9;
+    }
+    h2{
+      font-size:1.3rem;
+      font-weight:700;
+      color:#0F172A;
+      margin-bottom:.9rem;
+      letter-spacing:-.02em;
+    }
+    .section-body{font-size:.95rem;color:#475569;line-height:1.7}
+    .section-body p{margin-bottom:.85rem}
+    .section-body p:last-child{margin-bottom:0}
+
+    /* ── Benefits list ── */
+    .benefits-list{
+      list-style:none;
+      display:flex;
+      flex-direction:column;
+      gap:.55rem;
+    }
+    .benefits-list li{
+      display:flex;
+      align-items:flex-start;
+      gap:.7rem;
+      font-size:.93rem;
+      color:#374151;
+      line-height:1.5;
+    }
+    .check-icon{
+      flex-shrink:0;
+      width:20px;height:20px;
+      margin-top:.1rem;
+      background:#16A34A;
+      border-radius:50%;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+      background-size:65%;
+      background-repeat:no-repeat;
+      background-position:center;
+    }
+
+    /* ── Pros / Cons ── */
+    .pros-cons-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:1rem;
+      margin-top:.5rem;
+    }
+    @media(max-width:520px){.pros-cons-grid{grid-template-columns:1fr}}
+    .pros-col,.cons-col{
+      padding:1.1rem 1.25rem;
+      border-radius:10px;
+    }
+    .pros-col{background:#F0FDF4;border:1px solid #BBF7D0}
+    .cons-col{background:#FEF2F2;border:1px solid #FECACA}
+    .pros-col h3{
+      font-size:.78rem;
+      font-weight:700;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+      color:#15803D;
+      margin-bottom:.7rem;
+    }
+    .cons-col h3{
+      font-size:.78rem;
+      font-weight:700;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+      color:#B91C1C;
+      margin-bottom:.7rem;
+    }
+    .pros-list,.cons-list{
+      list-style:none;
+      display:flex;
+      flex-direction:column;
+      gap:.45rem;
+    }
+    .pros-list li,.cons-list li{
+      display:flex;
+      align-items:flex-start;
+      gap:.5rem;
+      font-size:.88rem;
+      color:#374151;
+      line-height:1.45;
+    }
+    .pro-marker{
+      flex-shrink:0;
+      width:16px;height:16px;
+      margin-top:.1rem;
+      background:#16A34A;
+      border-radius:50%;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+      background-size:65%;
+      background-repeat:no-repeat;
+      background-position:center;
+    }
+    .con-marker{
+      flex-shrink:0;
+      width:16px;height:16px;
+      margin-top:.1rem;
+      background:#DC2626;
+      border-radius:50%;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+      background-size:60%;
+      background-repeat:no-repeat;
+      background-position:center;
+    }
+
+    /* ── Pricing box ── */
+    .pricing-box{
+      background:#F8FAFC;
+      border:1px solid #E2E8F0;
+      border-radius:10px;
+      padding:1.25rem 1.5rem;
+      margin-top:.5rem;
+      font-size:.95rem;
+      color:#374151;
+      line-height:1.7;
+    }
+
+    /* ── Final verdict ── */
+    .final-verdict-card{
+      background:#F0FDF4;
+      border:1px solid #BBF7D0;
+      border-radius:12px;
+      padding:1.5rem;
+      margin-top:.75rem;
+    }
+    .final-verdict-card p{
+      font-size:.95rem;
+      color:#374151;
+      line-height:1.65;
+      margin-bottom:1.25rem;
+    }
+
+    /* ── FAQ accordion ── */
+    .faq-list{margin-top:.5rem}
+    details{border-bottom:1px solid #E2E8F0}
+    details:first-child{border-top:1px solid #E2E8F0}
+    summary{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:1rem 0;
+      font-size:.95rem;
+      font-weight:600;
+      color:#1E293B;
+      cursor:pointer;
+      list-style:none;
+      user-select:none;
+      gap:.75rem;
+    }
+    summary::-webkit-details-marker{display:none}
+    summary::after{
+      content:'';
+      flex-shrink:0;
+      width:20px;height:20px;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-size:contain;
+      background-repeat:no-repeat;
+      background-position:center;
+      transition:transform .2s;
+    }
+    details[open] summary::after{transform:rotate(180deg)}
+    .faq-answer{
+      padding:0 0 1rem;
+      font-size:.92rem;
+      color:#475569;
+      line-height:1.65;
+    }
+
+    /* ── Footer ── */
+    .page-footer{
+      background:#F8FAFC;
+      border-top:1px solid #E2E8F0;
+      padding:2rem 1.25rem;
+      margin-top:2rem;
+      text-align:center;
+    }
+    .page-footer p{
+      font-size:.78rem;
+      color:#94A3B8;
+      line-height:1.7;
+      margin-bottom:.5rem;
+    }
+    .page-footer p:last-child{margin-bottom:0}
+    .page-footer a{color:#64748B;text-decoration:underline}
+  </style>
+</head>
+<body>
+
+  <!-- Affiliate disclosure bar -->
+  <div class="disclosure-bar">
+    <strong>Disclosure:</strong> This page contains affiliate links. We may earn a commission at no extra cost to you if you purchase through our links.
+  </div>
+
+  <div class="page-wrap">
+
+    <!-- ── Page header ── -->
+    <header class="page-header">
+      <div class="review-badge">Expert Review</div>
+
+      <h1>{{ h1 }}</h1>
+
+      {% if rating is defined and rating %}
+      <div class="rating-row">
+        <div class="stars" aria-label="{{ rating | round(1) }} out of 5 stars">
+          <div class="stars-empty">★★★★★</div>
+          <div class="stars-filled" style="width:{{ (rating / 5 * 100) | round | int }}%">★★★★★</div>
+        </div>
+        <span class="rating-score">{{ rating | round(1) }}&thinsp;/&thinsp;5</span>
+        <span class="rating-label">
+          {%- if rating >= 4.5 %}Excellent
+          {%- elif rating >= 4.0 %}Very Good
+          {%- elif rating >= 3.5 %}Good
+          {%- elif rating >= 3.0 %}Fair
+          {%- else %}Below Average{%- endif %}
+        </span>
+      </div>
+      {% endif %}
+
+      <div class="header-meta">
+        <span>By <strong>Expert Review Team</strong></span>
+        {% if updated_at is defined and updated_at %}
+        <span>Last updated: <strong>{{ updated_at }}</strong></span>
+        {% elif created_at is defined and created_at %}
+        <span>Last updated: <strong>{{ created_at }}</strong></span>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if image_url is defined and image_url %}
+    <div class="hero-img-wrap">
+      <img src="{{ image_url }}" alt="{{ h1 }}" class="hero-img" loading="lazy">
+    </div>
+    {% endif %}
+
+    <!-- ── Quick Verdict card ── -->
+    <div class="verdict-card">
+      <div class="vc-top">
+        <div>
+          <div class="vc-label">Quick Verdict</div>
+          {% if rating is defined and rating %}
+          <div class="rating-row" style="margin:.1rem 0 0">
+            <div class="stars" aria-label="{{ rating | round(1) }} out of 5 stars">
+              <div class="stars-empty">★★★★★</div>
+              <div class="stars-filled" style="width:{{ (rating / 5 * 100) | round | int }}%">★★★★★</div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% if rating is defined and rating %}
+        <div class="verdict-score-block">
+          <span class="verdict-score-num">{{ rating | round(1) }}</span>
+          <span class="verdict-score-denom">/ 5.0</span>
+        </div>
+        {% endif %}
+      </div>
+      {% if verdict is defined and verdict %}
+      <p>{{ verdict }}</p>
+      {% endif %}
+      <a href="/aff/{{ slug }}" class="cta-btn">
+        <span>Get {{ h1 }}</span>
+        <span class="cta-arrow">→</span>
+      </a>
+    </div>
+
+    <!-- ── What Is ── -->
+    {% if what_is is defined and what_is %}
+    <section class="content-section">
+      <h2>What Is {{ h1 }}?</h2>
+      <div class="section-body"><p>{{ what_is }}</p></div>
+    </section>
+    {% endif %}
+
+    <!-- ── How It Works ── -->
+    {% if how_it_works is defined and how_it_works %}
+    <section class="content-section">
+      <h2>How Does It Work?</h2>
+      <div class="section-body"><p>{{ how_it_works }}</p></div>
+    </section>
+    {% endif %}
+
+    <!-- ── Key Benefits ── -->
+    {% if benefits is defined and benefits %}
+    <section class="content-section">
+      <h2>Key Benefits</h2>
+      <ul class="benefits-list">
+        {% for b in benefits %}
+        <li><span class="check-icon" aria-hidden="true"></span>{{ b }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <!-- ── Pros & Cons ── -->
+    {% if (pros is defined and pros) or (cons is defined and cons) %}
+    <section class="content-section">
+      <h2>Pros &amp; Cons</h2>
+      <div class="pros-cons-grid">
+        {% if pros is defined and pros %}
+        <div class="pros-col">
+          <h3>Pros</h3>
+          <ul class="pros-list">
+            {% for item in pros %}
+            <li><span class="pro-marker" aria-hidden="true"></span>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+        {% if cons is defined and cons %}
+        <div class="cons-col">
+          <h3>Cons</h3>
+          <ul class="cons-list">
+            {% for item in cons %}
+            <li><span class="con-marker" aria-hidden="true"></span>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- ── Who Is It For ── -->
+    {% if who_for is defined and who_for %}
+    <section class="content-section">
+      <h2>Who Is It For?</h2>
+      <div class="section-body"><p>{{ who_for }}</p></div>
+    </section>
+    {% endif %}
+
+    <!-- ── Pricing ── -->
+    {% if pricing is defined and pricing %}
+    <section class="content-section">
+      <h2>Pricing &amp; Value</h2>
+      <div class="pricing-box">{{ pricing }}</div>
+    </section>
+    {% endif %}
+
+    <!-- ── Final Verdict ── -->
+    {% if verdict is defined and verdict %}
+    <section class="content-section">
+      <h2>Final Verdict</h2>
+      <div class="final-verdict-card">
+        {% if rating is defined and rating %}
+        <div class="rating-row" style="margin-bottom:.85rem">
+          <div class="stars" aria-label="{{ rating | round(1) }} out of 5 stars">
+            <div class="stars-empty">★★★★★</div>
+            <div class="stars-filled" style="width:{{ (rating / 5 * 100) | round | int }}%">★★★★★</div>
+          </div>
+          <span class="rating-score">{{ rating | round(1) }}&thinsp;/&thinsp;5</span>
+        </div>
+        {% endif %}
+        <p>{{ verdict }}</p>
+        <a href="/aff/{{ slug }}" class="cta-btn">
+          <span>Visit Official Site</span>
+          <span class="cta-arrow">→</span>
+        </a>
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- ── FAQ ── -->
+    {% if faq is defined and faq %}
+    <section class="content-section">
+      <h2>Frequently Asked Questions</h2>
+      <div class="faq-list">
+        {% for item in faq %}
+        <details>
+          <summary>{{ item.q }}</summary>
+          <div class="faq-answer">{{ item.a }}</div>
+        </details>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+  </div><!-- /page-wrap -->
+
+  <!-- ── Footer ── -->
+  <footer class="page-footer">
+    <div class="page-wrap">
+      <p><strong>Affiliate Disclosure:</strong> This website participates in affiliate programs. If you click through and make a purchase, we may receive a commission at no additional cost to you. Our reviews reflect our independent research and honest assessment. We only recommend products we believe may offer genuine value.</p>
+      <p>© {% if created_at is defined and created_at %}{{ created_at[:4] }}{% else %}2026{% endif %} Expert Review. All rights reserved. | <a href="/p/{{ slug }}">Permalink</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>
