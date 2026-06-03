@@ -1,0 +1,32 @@
+{% extends "dash_base.html" %}
+{% block title %}Campaigns{% endblock %}
+{% block content %}
+
+<section class="section">
+  <h2 class="section-title">Campaigns <span class="count-badge">{{ campaigns|length }}</span></h2>
+  {% if campaigns %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Offer</th><th>Status</th><th class="num">Spend</th><th class="num">Revenue</th><th class="num">ROI%</th><th class="num">Conv</th><th class="num">Daily Cap</th><th></th></tr></thead>
+      <tbody>
+        {% for c in campaigns %}
+        <tr class="{% if c.profitable %}profitable-row{% endif %}">
+          <td class="mono dim">{{ c.id }}</td>
+          <td class="offer-name">{{ c.offer_name }}</td>
+          <td><span class="status-badge status-{{ c.status }}">{{ c.status }}</span></td>
+          <td class="num mono">${{ "%.2f"|format(c.spend) }}</td>
+          <td class="num mono">${{ "%.2f"|format(c.revenue) }}</td>
+          <td class="num mono{% if c.roi > 0 %} positive{% elif c.roi < -20 %} danger{% endif %}">{% if c.roi > 0 %}+{% endif %}{{ c.roi }}%</td>
+          <td class="num mono">{{ c.conversions }}</td>
+          <td class="num mono">${{ "%.2f"|format(c.daily_cap) }}</td>
+          <td class="badge-cell">{% if c.profitable %}<span class="scale-badge">SCALE ME</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No campaigns yet &mdash; the engine launches one on the next scheduled run once an offer and budget are ready.</p>
+  {% endif %}
+</section>
+{% endblock %}

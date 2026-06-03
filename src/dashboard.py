@@ -403,11 +403,8 @@ def register_dashboard_routes(app: FastAPI) -> None:
                 "kpi": _kpi_data(),
                 "engine": _engine_status(),
                 "budget": _budget_data(),
-                "campaigns": _campaigns_data(),
-                "activity": _activity_data(12),
+                "activity": _activity_data(15),
                 "pipeline": _pipeline_data(),
-                "affiliate_products": _affiliate_products_data(),
-                "products_result": _products_result(request),
             },
         )
         # If they arrived via ?token=, drop a cookie so future visits just work.
@@ -418,6 +415,30 @@ def register_dashboard_routes(app: FastAPI) -> None:
                 samesite="lax", max_age=60 * 60 * 24 * 30,
             )
         return resp
+
+    @app.get("/dashboard/products", response_class=HTMLResponse)
+    async def dashboard_products_view(request: Request) -> HTMLResponse:
+        if not _is_authed(request):
+            return HTMLResponse(_login_page(), status_code=200)
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return _templates.TemplateResponse(
+            request, "dashboard_products.html",
+            {
+                "active": "products", "now": now,
+                "affiliate_products": _affiliate_products_data(),
+                "products_result": _products_result(request),
+            },
+        )
+
+    @app.get("/dashboard/campaigns", response_class=HTMLResponse)
+    async def dashboard_campaigns_view(request: Request) -> HTMLResponse:
+        if not _is_authed(request):
+            return HTMLResponse(_login_page(), status_code=200)
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return _templates.TemplateResponse(
+            request, "dashboard_campaigns.html",
+            {"active": "campaigns", "now": now, "campaigns": _campaigns_data()},
+        )
 
     @app.get("/dashboard/pages", response_class=HTMLResponse)
     async def dashboard_pages_view(request: Request) -> HTMLResponse:
@@ -483,7 +504,7 @@ def register_dashboard_routes(app: FastAPI) -> None:
         res = affiliate_research.add_products(products)
         return RedirectResponse(
             url=(
-                f"/dashboard?added={res['added']}"
+                f"/dashboard/products?added={res['added']}"
                 f"&invalid={res['invalid']}"
                 f"&skipped={res['skipped_existing']}"
             ),

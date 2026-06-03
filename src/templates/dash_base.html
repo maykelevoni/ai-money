@@ -20,8 +20,8 @@
   </div>
   <nav class="topnav">
     <a href="/dashboard" class="navlink{% if active == 'overview' %} active{% endif %}">Overview</a>
-    <a href="/dashboard#products" class="navlink">Products</a>
-    <a href="/dashboard#campaigns" class="navlink">Campaigns</a>
+    <a href="/dashboard/products" class="navlink{% if active == 'products' %} active{% endif %}">Products</a>
+    <a href="/dashboard/campaigns" class="navlink{% if active == 'campaigns' %} active{% endif %}">Campaigns</a>
     <a href="/dashboard/pages" class="navlink{% if active == 'pages' %} active{% endif %}">Pages</a>
     <a href="/dashboard/activity" class="navlink{% if active == 'activity' %} active{% endif %}">Activity</a>
   </nav>
