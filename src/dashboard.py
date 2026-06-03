@@ -167,6 +167,33 @@ def _decisions_data(limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _affiliate_products_data() -> list[dict]:
+    try:
+        rows = db.fetchall(
+            """
+            SELECT
+                ap.id,
+                ap.product_id,
+                ap.headline,
+                ap.commission_pct,
+                ap.cancel_rate,
+                ap.score,
+                ap.status,
+                ap.stats_ok,
+                pg.slug      AS page_slug,
+                pg.status    AS page_status,
+                pg.views     AS page_views,
+                pg.clicks    AS page_clicks
+            FROM affiliate_products ap
+            LEFT JOIN affiliate_pages pg ON pg.product_id = ap.product_id
+            ORDER BY ap.id DESC
+            """
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
 def _pipeline_data() -> dict:
     rows = db.fetchall("SELECT status, COUNT(*) AS cnt FROM offers GROUP BY status")
     counts = {r["status"]: r["cnt"] for r in rows}
@@ -273,6 +300,8 @@ def register_dashboard_routes(app: FastAPI) -> None:
                 "campaigns": _campaigns_data(),
                 "decisions": _decisions_data(),
                 "pipeline": _pipeline_data(),
+                "affiliate_products": _affiliate_products_data(),
+                "products_saved": request.query_params.get("products_saved") == "1",
             },
         )
         # If they arrived via ?token=, drop a cookie so future visits just work.
@@ -318,3 +347,12 @@ def register_dashboard_routes(app: FastAPI) -> None:
             if value != "":  # blank = keep existing (don't wipe saved secrets)
                 config.set_setting(key, value)
         return RedirectResponse(url="/dashboard/settings?saved=1", status_code=303)
+
+    @app.post("/dashboard/products")
+    async def dashboard_products_post(
+        request: Request, products: str = Form("")
+    ):
+        _check_token(request)
+        from src import affiliate_research
+        affiliate_research.add_products(products)
+        return RedirectResponse(url="/dashboard?products_saved=1", status_code=303)

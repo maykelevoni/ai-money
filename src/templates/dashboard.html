@@ -110,6 +110,118 @@
   {% endif %}
 </section>
 
+<!-- PRODUCTS TO PROMOTE -->
+<section class="section">
+  <h2 class="section-title">
+    Products to Promote
+    <span class="count-badge">{{ affiliate_products|length }}</span>
+  </h2>
+
+  {% if products_saved %}
+  <div class="products-saved-notice">&#10003; Products saved.</div>
+  {% endif %}
+
+  <div class="products-intake">
+    <div>
+      <form method="post" action="/dashboard/products">
+        <label class="input-label" for="products-ta">Paste Digistore24 links or IDs &mdash; one per line</label>
+        <textarea id="products-ta" name="products" class="products-textarea"
+          placeholder="https://www.digistore24.com/redir/123456/...&#10;456789&#10;https://www.digistore24.com/product/..."></textarea>
+        <button type="submit" class="save-btn">Save Products</button>
+      </form>
+    </div>
+
+    <details class="explainer">
+      <summary class="explainer-summary">
+        How to pick products
+        <span class="explainer-caret">&#9658;</span>
+      </summary>
+      <div class="explainer-body">
+        <div class="explainer-steps">
+          <div class="step"><span class="step-num">1</span><span>Open <strong>digistore24.com/marketplace</strong></span></div>
+          <div class="step"><span class="step-num">2</span><span>Pick products using the rules below</span></div>
+          <div class="step"><span class="step-num">3</span><span>Copy the product link or its numeric ID</span></div>
+          <div class="step"><span class="step-num">4</span><span>Paste here one per line &rarr; Save</span></div>
+        </div>
+        <div class="cheat-section-label">Quick cheat sheet</div>
+        <div class="cheat-grid">
+          <div class="cheat-good">
+            <div class="cheat-subtitle">&#10003; Pick it if</div>
+            <ul>
+              <li>Commission 50%+</li>
+              <li>Cancel rate &lt;10%</li>
+              <li>Auto-approves affiliates</li>
+              <li>Price $30&ndash;$90</li>
+              <li>Has real sales history</li>
+            </ul>
+          </div>
+          <div class="cheat-bad">
+            <div class="cheat-subtitle">&#10007; Skip it if</div>
+            <ul>
+              <li>Cancel rate &gt;15%</li>
+              <li>Needs manual approval</li>
+              <li>Price $300+</li>
+              <li>Scammy claims</li>
+              <li>Gambling / adult / crypto</li>
+            </ul>
+          </div>
+        </div>
+        <div class="cheat-niches">Best niches: weight loss &middot; health &middot; survival &middot; beauty &middot; spirituality &middot; clean make-money</div>
+      </div>
+    </details>
+  </div>
+
+  {% if affiliate_products %}
+  <div class="table-wrap" style="margin-top:20px">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product ID</th>
+          <th>Headline</th>
+          <th>Status</th>
+          <th class="num">Comm%</th>
+          <th class="num">Cancel%</th>
+          <th class="num">Score</th>
+          <th>Page</th>
+          <th>Stats</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in affiliate_products %}
+        <tr>
+          <td class="mono dim">{{ p.id }}</td>
+          <td class="mono">{{ p.product_id }}</td>
+          <td class="offer-name">{{ p.headline or '&mdash;' }}</td>
+          <td><span class="status-badge status-{{ p.status }}">{{ p.status }}</span></td>
+          <td class="num mono">{% if p.commission_pct %}{{ "%.0f"|format(p.commission_pct) }}%{% else %}&mdash;{% endif %}</td>
+          <td class="num mono{% if p.cancel_rate and p.cancel_rate > 15 %} danger{% endif %}">{% if p.cancel_rate %}{{ "%.1f"|format(p.cancel_rate) }}%{% else %}&mdash;{% endif %}</td>
+          <td class="num mono">{% if p.score %}{{ "%.3f"|format(p.score) }}{% else %}&mdash;{% endif %}</td>
+          <td>
+            {% if p.page_slug %}
+            <a href="/p/{{ p.page_slug }}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:11px">{{ p.page_slug }}</a>
+            <span class="status-badge status-{{ p.page_status }}" style="margin-left:4px">{{ p.page_status }}</span>
+            {% else %}
+            <span class="dim" style="font-size:11px">&mdash;</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not p.stats_ok %}
+            <span class="stats-unavail-tag">live test</span>
+            {% else %}
+            <span class="dim" style="font-size:10px">ok</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty" style="margin-top:16px">No products yet &mdash; paste IDs above to get started.</p>
+  {% endif %}
+</section>
+
 <!-- BOTTOM: DECISIONS + PIPELINE -->
 <div class="bottom-grid">
 
