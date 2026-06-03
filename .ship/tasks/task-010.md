@@ -1,29 +1,29 @@
-# Task 010: Tracker endpoints
+# Task 010: Tests — units + smoke
 
 ## Description
-The web tracker that ties ad cost to affiliate revenue: serve landers (logging clicks), redirect CTAs to the offer (carrying subid), and receive conversion postbacks. (Plan Section 3.)
+Cover the pure logic and a boot smoke test. No live network.
 
 ## Files
-- `src/tracker.py` (create)
+- `tests/test_digistore24.py` (create)
+- `tests/test_affiliate_routes.py` (create)
 
 ## Requirements
-1. `GET /lp/{slug}`: generate a `click_id` (uuid), write a `clicks` row (campaign, zone, cost, country from query macros), render the lander HTML with the CTA pointing to `/go/{click_id}`.
-2. `GET /go/{click_id}`: look up the offer's `tracking_url`, append `click_id` as the subid param, 302-redirect to the CPA offer.
-3. `GET|POST /postback`: params `subid` (=click_id) + `payout`; optional shared-secret check; write a `conversions` row joined to the click. Return 200 quickly.
-4. Register these routes on the FastAPI app; mount `static/` and serve `landers/`.
+1. Unit `parse_product_id`: numeric id, redir link, marketplace URL, blank/garbage → None.
+2. Unit `build_promolink`: exact format with and without campaign key.
+3. Unit `affiliate_research.add_products`: counts + dedupe + status preservation (in-memory/temp DB).
+4. Smoke (TestClient, like existing tests): app boots; `GET /p/unknown` → 404; with a seeded page row + file, `GET /p/{slug}` → 200 and views increments; `GET /aff/{slug}` → 302 to a redir URL.
+5. `get_marketplace_entry` network calls must be mocked or skipped when no key (mirror `spike` skip pattern) — tests must pass offline.
 
 ## Existing Code to Reference
-- `src/main.py`, `src/db.py`, `src/models.py`.
-- `.ship/plan.md` Section 3 (endpoint table + macro URL).
-- `spike/FINDINGS.md` (postback format).
+- `conftest.py`, existing `tests/` (TestClient boot pattern, temp DB fixtures)
+- `.ship/learnings.md` (TestClient smoke pattern, offline-safe testing)
 
 ## Acceptance Criteria
-- [ ] Visiting `/lp/{slug}?zone=..&cost=..` logs a clicks row and serves the lander.
-- [ ] `/go/{click_id}` redirects to the offer URL with subid attached.
-- [ ] `/postback?subid=..&payout=..` records a conversion tied to the original click.
+- [ ] `pytest -q` passes offline with no Digistore24 key set
+- [ ] Route + parsing + intake covered
 
 ## Dependencies
-- Task 003, Task 002, Task 008
+- Task 003, 004, 007
 
 ## Commit Message
-feat: click/redirect/postback tracker endpoints
+test: units for Digistore24 client/intake and affiliate route smoke

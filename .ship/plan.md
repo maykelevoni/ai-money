@@ -1,205 +1,97 @@
-# Technical Plan: Autonomous Affiliate Arbitrage Engine
+# Technical Plan: Affiliate Pages (Digistore24, curated-ID model)
 
-> Greenfield Python service on the VPS. Single codebase, SQLite, FastAPI + APScheduler.
-> Read alongside `spec.md` and `context.md`.
-
----
-
-## Section 0: Riskiest-thing-first (a spike before building)
-
-The two external APIs are the project's biggest unknowns. **Before building the full engine**, the first task is a throwaway spike that confirms, for the *chosen* CPA + traffic networks:
-- CPA network: can we fetch offers, get a tracking link, and receive conversion **postbacks**? (CPALead / MyLead)
-- Traffic network: does the **Advertiser API** support create campaign, set/lower daily budget, pause campaign, and **exclude a zone/source**? (PropellerAds-style)
-
-If a chosen network can't do these via API, autonomy breaks — we swap the network *now*, not after building. This de-risks everything downstream.
-
----
+Builds on verified facts in `spec.md` + `.ship/learnings.md`. Mirrors existing engine patterns so it slots in cleanly.
 
 ## Section 1: Architecture Integration
+The existing engine abstracts everything behind small modules wired in `main.py` (`register_X(app)`), `scheduler.py` (APScheduler jobs guarded by `_safe` + readiness check), and `config.py` (`MANAGED_SETTINGS` + `_LiveSettings`). The affiliate track is a parallel, self-contained track that reuses: `db`, `llm` client, dashboard auth, the `pages/`-style static serving (like `home.py` serves landers), and the existing tracker concept.
 
-Greenfield. One always-on Python service with three logical layers:
+Key design choice from verification: **no discovery**. Operator pastes IDs → `affiliate_products` rows. The promolink is built by formula (robust). `getMarketplaceEntry` enrichment is **best-effort** (never hard-fails a product).
 
+## Section 2: Database Changes (append to `src/schema.sql`)
+```sql
+CREATE TABLE IF NOT EXISTS affiliate_products (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id      TEXT    NOT NULL UNIQUE,      -- Digistore24 numeric product id (from promolink)
+    entry_id        TEXT,                          -- marketplace entry id if resolved (for getMarketplaceEntry)
+    headline        TEXT    NOT NULL DEFAULT '',
+    language        TEXT    NOT NULL DEFAULT '',
+    currency        TEXT    NOT NULL DEFAULT '',
+    commission_pct  REAL    NOT NULL DEFAULT 0.0,  -- affiliate_share
+    epc             REAL    NOT NULL DEFAULT 0.0,  -- stats_affiliate_profit_visitor
+    cancel_rate     REAL    NOT NULL DEFAULT 0.0,  -- stats_cancel_rate
+    conversion_rate REAL    NOT NULL DEFAULT 0.0,
+    stars           REAL    NOT NULL DEFAULT 0.0,
+    score           REAL    NOT NULL DEFAULT 0.0,
+    stats_ok        INTEGER NOT NULL DEFAULT 0,    -- 1 if getMarketplaceEntry resolved
+    status          TEXT    NOT NULL DEFAULT 'candidate'
+                            CHECK(status IN ('candidate','testing','winner','loser','excluded','paused')),
+    rules_json      TEXT,
+    first_seen      TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_checked    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS affiliate_pages (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id     TEXT    NOT NULL REFERENCES affiliate_products(product_id),
+    slug           TEXT    NOT NULL UNIQUE,
+    title          TEXT    NOT NULL DEFAULT '',
+    file_path      TEXT    NOT NULL DEFAULT '',
+    views          INTEGER NOT NULL DEFAULT 0,
+    clicks         INTEGER NOT NULL DEFAULT 0,
+    status         TEXT    NOT NULL DEFAULT 'live'
+                           CHECK(status IN ('live','paused')),
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_aff_pages_slug ON affiliate_pages(slug);
 ```
-                ┌─────────────────────────────────────────────┐
-                │  scheduler (APScheduler, in-process)          │
-                │   • launch_job   (daily)   → pick & launch    │
-                │   • optimize_job (every 2-3h) → kill/scale    │
-                │   • report_job   (daily)   → Telegram         │
-                │   • budget_guard (every 15m) → hard caps      │
-                └───────────────┬─────────────────────────────┘
-                                │ calls
-   ┌────────────────────────────┼──────────────────────────────┐
-   │ core logic (pure-ish modules, unit-testable)               │
-   │  offers.py  generate.py  launch.py  optimize.py  report.py │
-   │  budget.py  (ledger + cap enforcement)                     │
-   └───────────────┬───────────────────────────┬───────────────┘
-                   │ reads/writes              │ HTTP
-            ┌──────▼──────┐            ┌────────▼─────────┐
-            │ SQLite db   │            │ external APIs    │
-            │ (engine.db) │            │ CPA / traffic /  │
-            └─────────────┘            │ LLM / Telegram   │
-                   ▲                   └──────────────────┘
-                   │ reads/writes
-   ┌───────────────┴───────────────────────────────────────────┐
-   │ web (FastAPI + uvicorn) — one process                      │
-   │  tracker: /lp/{cid}  /go/{cid}  /postback                  │
-   │  static landing pages (served from /landers)               │
-   │  dashboard: /dashboard (read-only)                         │
-   └────────────────────────────────────────────────────────────┘
-```
+`init_db()` already runs `schema.sql` on boot (idempotent `CREATE TABLE IF NOT EXISTS`), so no migration script needed.
 
-**Single process** (FastAPI app starts APScheduler on startup) for MVP simplicity; run under **systemd** on the VPS for auto-restart. Splitting web vs. scheduler into two processes is a noted future step, not MVP.
+## Section 3: Client — `src/clients/digistore24.py`
+Mirror `cpa.py` style (httpx, typed errors, `settings`).
+- `BASE = "https://www.digistore24.com/api/call"`, header `X-DS-API-KEY`.
+- `parse_product_id(line: str) -> str | None` — accept bare numeric id, or extract from `…/redir/{id}/…` or any URL containing the id.
+- `get_user_info()` → used to auto-resolve the affiliate name (`user_name`) if `DIGISTORE24_AFFILIATE_NAME` unset.
+- `get_marketplace_entry(entry_id) -> dict | None` — returns None on "not found"/403 (best-effort; never raises for missing).
+- `build_promolink(product_id, affiliate_name, campaign_key) -> str` → `https://www.digistore24.com/redir/{product_id}/{affiliate_name}/{campaign_key}`.
+- Thin auth check helper reused by `is_engine_configured`-style gating.
+- ⚠️ Open item to resolve at implementation with a REAL pasted id: how to map product_id → entry_id for `getMarketplaceEntry`. If no clean mapping, leave `entry_id` null, `stats_ok=0`, and rely on the live ad test (design already tolerates this).
 
-**Patterns to follow:** keep core modules free of framework imports (take data in, return decisions out) so the optimizer logic is testable without hitting live ad networks. All money-moving actions route through `budget.py` so the cap is enforced in exactly one place.
+## Section 4: Research/validate — `src/affiliate_research.py`
+- `add_products(raw_lines) -> dict` — parse each line → product_id → upsert `affiliate_products` (status candidate, preserve existing). Returns {added, skipped, invalid}.
+- `validate_and_enrich()` — for each candidate: try `get_marketplace_entry`; if resolved, fill stats, set `stats_ok=1`, compute `score = commission_pct * max(epc, 0.01)`, and auto-`excluded` when `commission_pct < MIN_COMMISSION` or `cancel_rate > MAX_CANCEL_RATE` or name/headline hits existing `offers._BLOCKED_PATTERNS`. If unresolved, keep candidate, log "stats unavailable". Never raise.
+- `pick_next_product()` — highest score candidate (mirror `offers.pick_next_offer`).
 
-**Deliberate non-adoption:** no paid tracker (Voluum/Keitaro/Binom) and no n8n. We build a ~100-line tracker instead — keeps recurring cost at $0 and the codebase readable, which matches the $100-total constraint.
+## Section 5: Page generation — `src/affiliate_generate.py`
+Mirror `generate.py`'s LLM usage (`src/clients/llm.py`, model from `settings.llm_model`).
+- `generate_page(product_row)` → LLM returns JSON sections (title, meta_desc, h1, what_is, how_it_works, benefits, pros[], cons[], who_for, pricing, verdict, faq[]). Render `affiliate_review.html` → write `pages/{slug}.html` → insert `affiliate_pages`. Slug from headline (kebab, deduped).
+- Page CTA points to `/aff/{slug}` (not the promolink directly) so clicks are counted first.
 
----
+## Section 6: Routes — `src/affiliate_routes.py` + dashboard
+- `register_affiliate_routes(app)` (called from `main.py`):
+  - `GET /p/{slug}` → serve `pages/{slug}.html`, `views += 1`, 404 unknown/paused.
+  - `GET /aff/{slug}` → `clicks += 1`, 302 to `build_promolink(product_id, affiliate_name, slug)`.
+- Dashboard (`src/dashboard.py`): new authed handlers
+  - `POST /dashboard/products` → `affiliate_research.add_products(textarea)` then redirect back.
+  - Render a **"Products to promote"** panel in `dashboard.html`: textarea + Save + collapsible **inline explainer** (condensed `HOW-TO-PICK-PRODUCTS.md`: marketplace → pick by rules → copy link → paste; cheat-sheet commission 50%+, low cancel, auto-approve, $30–90, avoid grey/scam) + a live list of products (id, headline, commission, cancel rate, status, page status, "stats unavailable" tag).
 
-## Section 2: Database (SQLite — `engine.db`)
+## Section 7: Config — `src/config.py`
+Add `_LiveSettings` properties + `MANAGED_SETTINGS` rows + resolve helpers:
+- `DIGISTORE24_API_KEY` (reuse the already-set `DIGISTORE` env as fallback in the resolver), `DIGISTORE24_AFFILIATE_NAME` (default: auto from `get_user_info().user_name`), `DIGISTORE24_MIN_COMMISSION` (50), `DIGISTORE24_MAX_CANCEL_RATE` (15).
+- `has_digistore()` + fold into engine-readiness so the affiliate scheduler jobs idle until the key is present (same pattern as `has_cpa`). Affiliate track is independent of CPA readiness.
 
-Single file, zero-config, perfect for one VPS. Tables:
+## Section 8: Scheduler — `src/scheduler.py`
+Two new `_safe` jobs, gated on `config.has_digistore()`:
+- `affiliate_validate_job` (every 6–12h): `validate_and_enrich()`.
+- `affiliate_pagegen_job` (daily): generate pages for candidates that have none yet (cap N/day to respect LLM budget).
+(PropellerAds campaign creation toward `/p/{slug}` reuses the existing launch/optimize machinery in a later iteration; MVP gets pages live + tracked.)
 
-- **offers** — `id, network, network_offer_id, name, vertical, payout, geo, status(candidate|testing|winner|loser|excluded), tracking_url, first_seen, last_tested`
-- **campaigns** — `id, offer_id, traffic_campaign_id, lander_path, status(pending|active|paused|killed), daily_cap, created_at, notes`
-- **creatives** — `id, campaign_id, traffic_creative_id, title, description, icon_path, status(active|paused), clicks, ctr`
-- **clicks** — `id, click_id(uuid), campaign_id, zone, cost, country, ts` (one row per visitor landing)
-- **conversions** — `id, click_id, payout, ts` (one row per postback; joins to clicks → campaign/zone)
-- **spend_snapshots** — `id, campaign_id, zone, spend, clicks, ts` (pulled from traffic API; source of truth for cost)
-- **decisions** — `id, ts, scope(zone|creative|campaign|offer), target_id, action(pause|scale|blacklist|kill|launch), reason, data_json` (full audit trail of every autonomous action)
-- **budget_ledger** — `id, ts, amount, kind(deposit|spend), running_total` (the spend cap source of truth)
+## Section 9: File Map
+Create: `src/clients/digistore24.py`, `src/affiliate_research.py`, `src/affiliate_generate.py`, `src/affiliate_routes.py`, `src/templates/affiliate_review.html`.
+Modify: `src/schema.sql` (2 tables), `src/config.py` (keys+thresholds), `src/main.py` (register routes), `src/scheduler.py` (2 jobs), `src/dashboard.py` (products panel + POST), `src/templates/dashboard.html` (panel + explainer).
+Keep: `spike/check_digistore24.py`, `HOW-TO-PICK-PRODUCTS.md`.
+Tests: extend smoke tests (TestClient boot, `/p/{slug}` 404, `parse_product_id` units, `build_promolink` format).
 
-ROI for any campaign/zone = `sum(conversions.payout) − sum(spend_snapshots.spend)`, sliced by the join on `click_id`/`zone`.
-
-Migrations: a single `schema.sql` run on startup if tables absent (no migration framework needed for greenfield MVP).
-
----
-
-## Section 3: API Design (internal web endpoints)
-
-The web layer is mostly the **tracker**, plus the dashboard. All public-facing, no auth on tracker (must accept ad-network traffic); dashboard behind a simple token.
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/lp/{campaign_slug}` | Serve the AI-generated landing page. Logs a `clicks` row using macros from query (`?zone=&cost=&country=&cid=`). Sets `click_id`. |
-| GET | `/go/{click_id}` | CTA redirect. Appends `click_id` as subid to the offer's `tracking_url` and 302-redirects to the CPA offer. |
-| GET/POST | `/postback` | CPA network calls this on conversion: `?subid={click_id}&payout={amount}`. Writes `conversions` row. Optional shared-secret param. |
-| GET | `/dashboard` | Read-only HTML: campaigns table (spend/rev/ROI/status), decisions feed, budget remaining, "profitable — scale me" flags. Token-gated. |
-| GET | `/health` | Liveness for systemd/monitoring. |
-
-**Traffic-network macros:** landing page URL registered with the network as `https://DOMAIN/lp/{slug}?zone=${ZONE}&cost=${COST}&country=${COUNTRY}&cid=${CLICKID}` — exact macro names confirmed in the Section 0 spike.
-
----
-
-## Section 4: Frontend (the dashboard — internal, minimal)
-
-Not a marketing site → no external design refs. One server-rendered page (Jinja2), no SPA, no build step.
-
-- **Style:** dark, monospace-ish, dense dashboard. Function over polish. Single CSS file, no framework (or tiny Pico.css).
-- **Components on the one page:**
-  - **Budget bar** — funded vs. spent vs. remaining; turns red near cap.
-  - **Campaigns table** — offer, status, spend, revenue, ROI%, conversions; profitable rows highlighted green with a "scale me" badge.
-  - **Decisions feed** — reverse-chron list of optimizer actions with the reason ("blacklisted zone 4471: $2.10 spent, 0 conv").
-  - **Offer pipeline** — counts of candidate/testing/winner/loser offers.
-- **Refresh:** auto-refresh every 30s (meta refresh or tiny htmx). No client state.
-- Renders from the same SQLite the engine writes — always live.
-
----
-
-## Section 5: Service Integration
-
-- **CPA network:** REST API to list offers + get tracking links; **postback** at our `/postback`. **Verified:** CPALead has a JSON offers-feed API + postback ({subid}/{payout}/{ip_address}, IP whitelist) — but its catalog skews content-locking/gray, so for CLEAN offers prefer **MyLead** (or mainstream net), CPALead as fallback. Keys in `.env`.
-- **Traffic network: PropellerAds (CONFIRMED + already funded by operator).** Advertiser/SSP API v5 verified to support every needed call: create/pause campaign, set/change daily budget+bid, whitelist/blacklist zones, per-zone stats. Self-serve API key. Operator already has a funded account ($24.47 + topping up $100), so the $100 min-deposit gate is already cleared. Build the `clients/traffic.py` wrapper modeled on `JanNafta/propellerads-mcp` client.py (Python reference impl with create/pause/clone, budget/bid, zone blacklist + dry-run, ROI analytics). Push/interstitial formats fit our clean offers.
-- **LLM (Anthropic, cheap model):** `generate.py` calls Claude Haiku for landing-page copy + push creatives (title ≤ ~30 chars, desc ≤ ~45 chars). Icon image for MVP = a simple generated/stock icon (Pillow text-on-color or a small bundled icon set); real image optimization is post-MVP.
-- **Telegram:** Bot API `sendMessage` for the daily report + any cap/alert pushes. Token + chat_id in `.env`.
-- **VPS:** hosts the FastAPI process (systemd), SQLite file, landers, dashboard. Needs a domain pointed at it + HTTPS (Caddy or nginx+certbot — Caddy is one line, recommended).
-
----
-
-## Section 6: Optimizer Logic (the core proof — detailed)
-
-Runs every 2–3h. **Statistical-safety first**: never act below minimum sample sizes (small budgets = noisy data).
-
-Per active campaign, after pulling fresh `spend_snapshots`:
-1. **Budget guard (always first):** if `budget_ledger` running spend ≥ `GLOBAL_BUDGET` → pause ALL campaigns via API, Telegram alert, stop. If today's spend ≥ `DAILY_CAP` → pause until tomorrow.
-2. **Zone blacklist:** any zone where `spend ≥ 1.5 × offer.payout` AND `conversions = 0` AND `clicks ≥ MIN_ZONE_CLICKS` → exclude zone via traffic API; log decision.
-3. **Creative pause:** creative with `clicks ≥ MIN_CREATIVE_CLICKS` and CTR or ROI in bottom tier → pause; keep the best performers.
-4. **Scale winner:** campaign with `conversions ≥ MIN_CONV` and rolling ROI ≥ `SCALE_ROI` (e.g. +20%) → raise `daily_cap` one step (e.g. +50%), capped by remaining global budget; log.
-5. **Kill loser:** campaign with `spend ≥ KILL_SPEND` (e.g. 3× payout) and ROI ≤ `KILL_ROI` (e.g. −50%) → pause campaign, mark offer `loser`; `launch_job` will rotate to the next candidate offer.
-
-All thresholds live in `config/.env` so behavior is tunable without code changes. Every branch writes a `decisions` row → full audit trail surfaced on the dashboard and in the daily report.
-
----
-
-## Section 7: Tech Stack & Dependencies
-
-- Python 3.11+
-- **FastAPI** + **uvicorn** — web/tracker/dashboard
-- **APScheduler** — in-process scheduling
-- **httpx** — external API calls
-- **anthropic** — LLM SDK (cheap model)
-- **Jinja2** — lander + dashboard templates
-- **python-dotenv** — config
-- **Pillow** — MVP icon images
-- SQLite via stdlib `sqlite3` + a thin `db.py` (no ORM needed)
-- **Caddy** (system, not pip) — HTTPS reverse proxy
-- **systemd** — keep the service alive
-
-Total recurring cost: domain (~$10/yr) + LLM pennies + ad spend. Hosting $0 (existing VPS).
-
----
-
-## Section 8: File Map
-
-```
-ai-money/
-  README.md                 # what it is + the honest odds
-  SETUP.md                  # the one-time manual checklist (accounts, keys, postback)
-  requirements.txt
-  config/
-    .env.example            # every key + threshold documented
-  src/
-    main.py                 # FastAPI app + startup (schema init, scheduler start)
-    config.py               # load + validate .env
-    db.py                   # sqlite connection + helpers
-    schema.sql              # table definitions
-    models.py               # lightweight dataclasses for rows
-    offers.py               # fetch/filter/select CPA offers
-    generate.py             # LLM → landing page HTML + push creatives + icon
-    launch.py               # create campaign + creatives on traffic network
-    optimize.py             # the core kill/scale/blacklist loop (Section 6)
-    budget.py               # ledger + global/daily cap enforcement (single chokepoint)
-    report.py               # daily Telegram summary
-    scheduler.py            # APScheduler job registration
-    tracker.py              # /lp /go /postback route handlers
-    dashboard.py            # /dashboard route + render
-    clients/
-      cpa.py                # CPA network API wrapper
-      traffic.py            # traffic network Advertiser API wrapper
-      llm.py                # Anthropic wrapper
-      telegram.py           # Bot API wrapper
-    templates/
-      lander_base.html      # Jinja base for generated landers
-      dashboard.html
-    static/
-      dashboard.css
-  landers/                  # generated landing pages (gitignored)
-  data/
-    engine.db               # SQLite (gitignored)
-  tests/
-    test_optimize.py        # optimizer decisions on synthetic data (no live APIs)
-    test_budget.py          # cap enforcement never exceeded
-  spike/
-    check_apis.py           # Section 0 throwaway validation script
-```
-
----
-
-## Open Questions / Risks (carried into build)
-
-1. **Ad-creative moderation:** many traffic networks human-review new creatives → launch isn't instant (hours). Engine must handle `pending` campaigns gracefully. (Confirm in spike.)
-2. **CPA account approval:** some networks require a short interview/phone verify. That's a setup-time human step (in SETUP.md), not an engine concern.
-3. **API access tiers:** a network might gate the Advertiser API behind a deposit/min spend. Spike confirms before committing.
-4. **GEO/payout fit for tiny budget:** need cheap-traffic GEOs whose offers still convert; `offers.py` filters will need tuning during the first live runs.
-5. **Data noise on $100:** thresholds err toward *not* acting until min samples — accepting slower decisions to avoid burning budget on noise.
-```
+## Risks / open items
+1. `entry_id` ↔ `product_id` mapping for `getMarketplaceEntry` — resolve with one real pasted product; design tolerates failure (best-effort).
+2. Auto-approve detection — may not be exposed per product via API; fallback = operator follows the pick guide (auto-approve column on the marketplace site) + the live test catches dead links.
+3. Promolink for a non-partnered product may bounce — surface link health in the dashboard product list.

@@ -26,3 +26,16 @@
 - **DECIDED traffic network = PropellerAds.** Push/interstitial formats fit clean offers.
 - **CPALead** CONFIRMED: JSON offers-feed API (`campaign_json_load_offers.php?id=AFFID&ua=&geoip=`, device/GEO targeting) + postback with {subid}/{payout}/{ip_address} macros + IP whitelist. BUT its catalog skews content-locking/incentive (gray). For genuinely clean offers prefer **MyLead** or a mainstream CPA net; keep CPALead as fallback. Clean-vertical filter (Task 007) is therefore essential, not optional.
 - **Revised budget fit:** domain ~$1–12 (or free DuckDNS subdomain = $0), LLM ~$5 (Haiku pennies), traffic first deposit $10 (PopAds) or $50 (HilltopAds), rest as reserve to scale winners.
+
+## Product Source Pivot (2026-06-03)
+- **ClickBank rejected as a source:** has NO marketplace discovery API (Products API is vendor-only). Scrubbed from spec entirely.
+- **Digistore24 = chosen primary source.** Instant free account, real `listMarketplaceEntries` API, paid-traffic friendly (CAPI). Verified the API *function exists*; exact fields unconfirmed until a live key is used.
+- **Autonomy rule:** promote AUTO-APPROVE products only (no per-vendor "Promote now" approval), so the track stays fully API-autonomous.
+- **CPA strategy:** keep existing CPALead/MyLead code parked as zero-cost fallback (engine abstracts source via OfferRecord). Do NOT invest more in CPA; do NOT apply to new CPA networks (rejection-prone, slow). ~90% effort on Digistore24.
+- **Verify-first:** `spike/check_digistore24.py` must confirm the live API contract (auth, marketplace listing, auto-approve flag, promolink format, field names) BEFORE planning tasks. Plan.md is intentionally NOT written yet to avoid planning on unverified field names.
+- **BLOCKER:** operator must create a Digistore24 account + API key. Everything downstream waits on this.
+
+## VERIFY-FIRST RESULT (2026-06-03) — Digistore24 discovery API does NOT exist
+- Live verification proved Digistore24's "marketplace API" (listMarketplaceEntries) lists the VENDOR's own products, not the browsable marketplace — same wall as ClickBank. No search/browse/discovery endpoint anywhere in the 130+ fn API.
+- Net: NO instant-access affiliate network gives clean autonomous product DISCOVERY via API (options are all: scrape / per-merchant approval / prior-sales-to-unlock).
+- Reframe under consideration: keep discovery as a tiny manual step (operator curates a few product IDs from the marketplace), make EVERYTHING ELSE autonomous via API (getMarketplaceEntry enrichment + ranking, page-gen, PropellerAds, optimize). Awaiting operator decision.

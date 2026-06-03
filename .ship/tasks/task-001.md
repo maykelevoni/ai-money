@@ -1,29 +1,25 @@
-# Task 001: API validation spike
+# Task 001: Database tables for affiliate products & pages
 
 ## Description
-Throwaway script that PROVES the chosen CPA + traffic networks expose the API calls autonomy requires. This runs before any real build — if a network can't do these, we swap it now. (Plan Section 0.)
+Add the two SQLite tables that back the Digistore24 affiliate track. `init_db()` already executes `schema.sql` idempotently on boot, so no migration code is needed.
 
 ## Files
-- `spike/check_apis.py` (create)
-- `config/.env.example` (create — minimal: CPA + traffic keys only for now)
+- `src/schema.sql` (modify — append)
 
 ## Requirements
-Networks are decided: **traffic = PropellerAds** (operator already funded; API v5 verified in research), **CPA = MyLead preferred / CPALead fallback** (clean offers). This task confirms credentials work and captures EXACT request/response schemas — not whether the capability exists (already confirmed).
-1. Against the CPA network: list offers, fetch a tracking link for one offer, and capture the postback URL format ({subid}/{payout} macros).
-2. Against PropellerAds SSP API v5 (auth with the operator's API key): list campaigns, and capture the exact request/response shape for: create campaign, set/lower daily budget, pause campaign, exclude a zone, pull per-zone stats. Model expectations on `JanNafta/propellerads-mcp` client.py.
-3. Print PASS/FAIL per capability against the LIVE account (catches auth/permission/tier issues).
-4. Capture the exact macro tokens PropellerAds passes (zone, cost, country, clickid) for the landing-page URL.
+1. Add `affiliate_products` table exactly per `.ship/plan.md` Section 2 (columns: product_id UNIQUE, entry_id, headline, language, currency, commission_pct, epc, cancel_rate, conversion_rate, stars, score, stats_ok, status CHECK candidate/testing/winner/loser/excluded/paused, rules_json, first_seen, last_checked).
+2. Add `affiliate_pages` table per plan (product_id FK, slug UNIQUE, title, file_path, views, clicks, status CHECK live/paused, created_at) + `idx_aff_pages_slug`.
+3. Use the same formatting/defaults style as existing tables (`datetime('now')`, `CHECK(...)`).
 
 ## Existing Code to Reference
-- None (first task). Follow `.ship/plan.md` Section 0 + Section 5.
+- `src/schema.sql` (table style, the existing `offers` table is the closest analog)
 
 ## Acceptance Criteria
-- [ ] Script runs and prints PASS/FAIL for every required capability of both networks.
-- [ ] Postback URL format and traffic macro names are written to `spike/FINDINGS.md`.
-- [ ] If a capability is missing, FINDINGS.md states the recommended alternative network.
+- [ ] Both tables added with correct columns, constraints, index
+- [ ] `python3 -c "import sqlite3; sqlite3.connect(':memory:').executescript(open('src/schema.sql').read())"` runs without error
 
 ## Dependencies
-- None
+- none
 
 ## Commit Message
-chore: API validation spike for CPA + traffic networks
+feat: add affiliate_products and affiliate_pages tables

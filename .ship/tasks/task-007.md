@@ -1,28 +1,30 @@
-# Task 007: Offer fetch, filter & selection
+# Task 007: Public page serving & click-tracking routes
 
 ## Description
-Pull offers from the CPA network, filter to CLEAN verticals within budget reach, persist them, and pick the next candidate to test. (Plan Sections 5, 6; spec "clean offers only".)
+Serve generated pages and redirect clicks through the promolink with tracking.
 
 ## Files
-- `src/offers.py` (create)
+- `src/affiliate_routes.py` (create)
+- `src/main.py` (modify — register)
 
 ## Requirements
-1. `sync_offers()`: fetch via `clients.cpa.list_offers`, upsert into `offers` table with status `candidate`.
-2. Filter rules: vertical in ALLOWED set (free-trial, lead-gen, email/zip submit, app-install); EXCLUDE sweepstakes / "you won" / content-locker / adult. Payout ≥ configured minimum. GEO in cheap-traffic allow-list.
-3. `pick_next_offer()`: return the best untested `candidate` (e.g. highest payout), skipping `loser`/`excluded`.
-4. `mark_offer(offer_id, status)` helper.
+1. `register_affiliate_routes(app)`:
+   - `GET /p/{slug}` → read `affiliate_pages` by slug; if missing or status='paused' → 404; else `UPDATE … views = views + 1`, return the file's HTML (FileResponse/HTMLResponse).
+   - `GET /aff/{slug}` → look up product_id via the page; `UPDATE … clicks = clicks + 1`; build `digistore24.build_promolink(product_id, digistore24.resolve_affiliate_name(), slug)`; 302 redirect. 404 for unknown slug.
+2. Register in `main.py` next to the other `register_*` calls.
 
 ## Existing Code to Reference
-- `src/clients/cpa.py` (Task 005), `src/db.py`, `src/models.py`.
-- spec.md "Out of Scope" (excluded verticals).
+- `src/home.py` (serving static/generated HTML, route registration pattern)
+- `src/tracker.py` (click handling / redirect pattern)
+- `src/main.py` (register_* wiring)
 
 ## Acceptance Criteria
-- [ ] `sync_offers()` populates the offers table with only clean verticals.
-- [ ] Sketchy verticals are filtered out (unit-checkable with sample data).
-- [ ] `pick_next_offer()` skips loser/excluded and returns the top candidate.
+- [ ] `GET /p/unknown` → 404; valid slug → 200 and increments views
+- [ ] `GET /aff/{slug}` → 302 to a `…/redir/{id}/{aff}/{slug}` URL and increments clicks
+- [ ] App still boots via TestClient
 
 ## Dependencies
-- Task 005, Task 003
+- Task 003, 006
 
 ## Commit Message
-feat: offer sync, clean-vertical filtering, and selection
+feat: serve affiliate pages and track click-throughs

@@ -1,90 +1,122 @@
-# Spec: Autonomous Affiliate Arbitrage Engine
-
-> Feature: `autonomous-income-engine` · Project: `ai-money`
-> Goal: prove AI can earn money autonomously on a VPS running 24/7, with the human only doing setup.
-
----
+# Feature Spec: Affiliate Pages (Digistore24, curated-ID model)
 
 ## Feature Summary
-
-A self-running system on the user's VPS that makes money via **CPA affiliate arbitrage**: it buys cheap ad traffic, sends it to AI-generated landing pages promoting affiliate offers, and earns a payout each time a visitor completes the offer's action (a free signup / lead / install). The AI continuously reads performance data and **kills losing campaigns, scales winning ones, and blocks bad traffic** — the optimization loop a human media-buyer normally grinds by hand.
-
-The win condition is not big money. It is a **single profitable campaign running hands-off**, proving the loop closes: money in (ad spend) < money out (affiliate revenue), with no human in the loop after setup.
-
----
+A revenue track where the operator pastes a short list of **Digistore24 product IDs/links** into the dashboard, and the engine autonomously does the rest: builds a promotion page per product, drives **PropellerAds** traffic to it, tracks clicks → conversions via Digistore24's postback (IPN), and kills losers / scales winners based on **real ad-test results**. Pages double as paid-traffic landers and accrue organic SEO over time.
 
 ## Problem Statement
+The CPA-network track is blocked (MyLead rejected the account). We need an instant-access, autonomous-via-API product source.
 
-"AI that makes money autonomously" mostly doesn't exist because money has gates AI can't pass alone (payouts, identity, platform ToS). The user accepts being the legal/financial wrapper and wants the AI to do all the *labor*. Prior options were rejected:
-- SEO content sites → **too slow** (1–3 months to rank).
-- Marketplace gigs → not fully passive.
-- Trading bots → high risk of losing capital.
+**Verified 2026-06-03 against the live Digistore24 API + official OpenAPI spec:** neither ClickBank nor Digistore24 expose an affiliate **product-discovery** API. Digistore24's `listMarketplaceEntries` lists *the vendor's own* products (returns 0 for our affiliate account); there is no `search`/`browse` endpoint anywhere in its 130+ functions. **Conclusion: autonomous product DISCOVERY via API is not possible.** Everything downstream of *having a product ID* IS automatable.
 
-Paid-traffic affiliate arbitrage is the one model that is **fast** (paid traffic = instant visitors), **capped-risk** (hard daily/global budget limits, never loses more than funded), and **fully autonomous once running** (no customers, no fulfillment, no support — just an optimization loop).
+**Chosen model:** the operator curates a few product IDs by hand (5 min, occasional — guided by `HOW-TO-PICK-PRODUCTS.md`); the engine automates everything after that. ~95% hands-off, no scraping, no approval-rejection gate.
 
----
+## Verified Facts (build on these, not guesses)
+- Digistore24 classic API: `GET https://www.digistore24.com/api/call/{fn}`, header `X-DS-API-KEY: <key>`, JSON `{result, data}`. Auth confirmed (account `paidrew`, roles affiliate+merchant).
+- **Promolink (the autonomous link — definitely works, formula-based):** `https://www.digistore24.com/redir/{product_id}/{affiliate_name}/{campaign_key}` — no per-click approval. `{affiliate_name}` = the account's Digistore24 ID.
+- **Promotion requires an affiliate partnership per product.** Operator must pick **auto-approve** products (or accept the partnership once) so the promolink is live. ⚠️ confirm auto-approve detection per product during build.
+- **Live stats (best-effort pre-filter):** `getMarketplaceEntry(entry_id)` returns `affiliate_share` (commission %), `stats_affiliate_profit_visitor` (EPC), `stats_affiliate_profit_sale`, `stats_cancel_rate`, `stats_conversion_rate`, `stats_stars`, `stats_seller_rank`, `stats_is_valid`, price, currency, language, headline, description. ⚠️ `entry_id` ≠ the product ID in a promolink, and access for non-owned products is UNCONFIRMED. Treat as best-effort: if a pasted product resolves and returns stats, use them to auto-drop bad picks; if not, skip the pre-filter and rely on the live ad test.
+- **Conversion tracking = Digistore24 IPN/postback** to the engine's tracker (the real judge of winners/losers). Not dependent on getMarketplaceEntry.
 
 ## User Stories
 
-### Story 1 — Setup (the only manual part)
-**As the operator**, I do a one-time setup: create accounts on one CPA network and one traffic network, fund the traffic account, and drop API keys into a config file. After that I touch nothing.
-- **Acceptance:** a documented setup checklist; the engine reads all credentials from a single `.env`/config; no code edits needed to run.
+### Story 1: Operator pastes products (dashboard input)
+**As** the operator,
+**I want** a box on the dashboard to paste Digistore24 product links or IDs,
+**So that** I choose what to promote without touching code.
 
-### Story 2 — Autonomous campaign creation
-**As the engine**, I pull available CPA offers, pick promising ones (clean verticals only: free-trial / lead-gen / app-install), generate a landing page + ad creatives for each, and launch a small capped campaign on the traffic network — without human input.
-- **Acceptance:** given valid API keys, the engine launches at least one live campaign end-to-end on a schedule, with spend capped at the configured daily limit.
+**Acceptance Criteria:**
+- [ ] Dashboard has a "Products to promote" textarea: one product link or ID per line
+- [ ] Accepts a full link (`…/redir/{id}/…` or a marketplace/product URL) OR a bare numeric ID; the ID is extracted automatically
+- [ ] On Save, each ID is upserted into `affiliate_products` with status `candidate`; existing rows preserve status
+- [ ] Invalid/blank lines are ignored with a visible note; duplicates de-duped
+- [ ] Per-product live status shown back (see Story 5)
 
-### Story 3 — Autonomous optimization (the core proof)
-**As the engine**, every N hours I read each campaign's spend vs. revenue per creative and per traffic source/zone, then **pause anything below the ROI threshold, scale winners, and blacklist bad zones** — automatically.
-- **Acceptance:** optimizer runs on a cron; logs every decision (pause/scale/blacklist) with the data behind it; never exceeds the global budget cap.
+### Story 2: Automated validation + enrichment (best-effort)
+**As** the engine,
+**I want** to enrich each pasted product and drop obviously bad ones before spending ad money,
+**So that** the operator's pick gets a second safety check.
 
-### Story 4 — Visibility & the "add budget" signal
-**As the operator**, I get a daily report (Telegram or email) and a simple read-only dashboard showing spend, revenue, ROI, and what the optimizer did — so I can watch the proof and decide when to top up the budget.
-- **Acceptance:** a daily summary is delivered; a local dashboard shows live campaign stats; when a campaign is sustainably profitable it is clearly flagged as "scale me."
+**Acceptance Criteria:**
+- [ ] For each candidate, attempt `getMarketplaceEntry` to fetch commission, EPC, cancel rate, conversion, stars
+- [ ] If stats resolve: auto-mark `excluded` when commission < min (default 50%) OR cancel rate > max (default 15%) OR clearly grey/banned niche (reuse existing `_BLOCKED_PATTERNS`)
+- [ ] If stats DON'T resolve (entry not accessible): keep as `candidate`, log "stats unavailable — relying on live test", do NOT hard-fail
+- [ ] Opportunity score = commission × EPC when available, else commission only
+- [ ] Rules/notes stored as JSON on the product row
 
-### Story 5 — Hard safety rails
-**As the operator**, I am guaranteed the engine can never spend more than I funded.
-- **Acceptance:** a global budget ceiling and per-day cap enforced in code *and* on the traffic network; if either is hit, the engine pauses all spend and notifies me.
+### Story 3: Automated Page Generation
+**As** the engine,
+**I want** to generate a promotion page per candidate product,
+**So that** there's a lander for paid traffic (and SEO over time).
 
----
+**Acceptance Criteria:**
+- [ ] LLM writes page sections: title, meta_desc, h1, what_is, how_it_works, benefits, pros, cons, who_for, pricing, verdict, faq (3-5)
+- [ ] Rendered into `affiliate_review.html`, saved to `pages/{slug}.html`
+- [ ] Row inserted into `affiliate_pages`
+- [ ] Indexed (robots: index,follow), canonical URL, Schema.org Review + FAQPage
+- [ ] Affiliate disclosure in top bar and footer
+
+### Story 4: Page Serving + Click Tracking
+**As** a visitor,
+**I want** to read the page and click through to the product,
+**So that** conversions attribute back to the page.
+
+**Acceptance Criteria:**
+- [ ] GET `/p/{slug}` serves the pre-generated HTML; view count incremented
+- [ ] CTA links to `/aff/{slug}`
+- [ ] GET `/aff/{slug}` increments click count, then 302-redirects to the Digistore24 promolink (`/redir/{product_id}/{affiliate_name}/{slug}` — slug as campaign key for attribution)
+- [ ] 404 for unknown slugs
+
+### Story 5: Dashboard Visibility
+**As** the operator,
+**I want** to see each product's status and page performance,
+**So that** I know what's live and converting.
+
+**Acceptance Criteria:**
+- [ ] Products section shows: id, headline, commission, cancel rate, score, status (candidate/testing/winner/loser/excluded), page status, "stats unavailable" flag where applicable
+- [ ] Per-page stats: views, clicks
+- [ ] Manual pause (status=paused) stops a product/page
+
+### Story 6: Settings Configuration
+**As** the operator,
+**I want** Digistore24 keys in the dashboard Settings,
+**So that** no redeploy is needed.
+
+**Acceptance Criteria:**
+- [ ] `DIGISTORE24_API_KEY` and `DIGISTORE24_AFFILIATE_NAME` in MANAGED_SETTINGS (reuse the existing `DIGISTORE` env value already set)
+- [ ] Engine idles gracefully if keys not set (existing pattern)
+- [ ] `DIGISTORE24_MIN_COMMISSION` and `DIGISTORE24_MAX_CANCEL_RATE` configurable
 
 ## Technical Requirements
-
-- **Runtime:** runs unattended on the VPS 24/7 (cron / scheduler + a long-running service).
-- **Orchestration:** a **single standalone Python service** on the VPS (no n8n — the optimizer logic is more than glue and is cleaner as code). One readable codebase with a built-in scheduler; no node-graph tooling.
-- **LLM:** cheap model (Claude Haiku or an open model) for landing-page copy, angles, and ad creatives — kept under the infra budget.
-- **CPA network:** one beginner-instant-approval network with an API + conversion postbacks (candidates: CPALead, MyLead).
-- **Traffic network:** one push/pop/native network that allows affiliate offers, has low minimums, and an Advertiser API (candidate: PropellerAds or similar).
-- **Tracking:** a minimal self-hosted click→conversion tracker on the VPS (redirect + log + postback endpoint) to tie ad cost to affiliate revenue per campaign/creative/zone. No paid tracker for MVP.
-- **Landing pages:** generated as static HTML, served from the VPS; fast-loading, mobile-first (push/pop traffic is ~mobile).
-- **Config/secrets:** single config file / `.env`; no secrets in code.
-- **Budget enforcement:** global + daily caps in code, mirrored by caps set via the traffic network API.
+- New SQLite tables: `affiliate_products`, `affiliate_pages`
+- New client: `src/clients/digistore24.py` (`get_marketplace_entry`, `build_promolink`, ID/link parsing)
+- New module: `src/affiliate_research.py` (validation + enrichment of pasted IDs)
+- New module: `src/affiliate_generate.py` (page generation)
+- New template: `src/templates/affiliate_review.html`
+- New routes: `src/affiliate_routes.py` (`/p/{slug}`, `/aff/{slug}`) + dashboard input handler
+- Scheduler: jobs for validate+enrich and daily page-gen for new candidates
+- Pages saved to `pages/`
+- Keep verification spike `spike/check_digistore24.py`
 
 ## UI/UX Requirements
-
-- **Read-only local dashboard** (served from the VPS): table of campaigns with live spend / revenue / ROI / status, a feed of optimizer actions, and a clear "profitable — scale me" flag. Minimal, dark, dashboard-style; built fast, function over polish.
-- **Daily report** pushed via **Telegram** (free bot API): spend, revenue, ROI, top/worst campaigns, actions taken, current budget remaining.
+- Dashboard: "Products to promote" textarea + Save + live per-product status list
+- **Inline explainer panel** right next to the textarea (so the operator is self-serve, no external docs needed): short steps = (1) open the Digistore24 marketplace, (2) pick products by the rules, (3) copy the product link, (4) paste here one per line. Include a condensed "pick the best" cheat-sheet (commission 50%+, low cancel rate, auto-approve, $30–90, avoid scammy/grey niches) — same content as `HOW-TO-PICK-PRODUCTS.md`, shown collapsible.
+- Promotion page: light theme, max 720px column, star rating, Quick Verdict card + CTA, pros/cons grid, FAQ, disclosure bar+footer, mobile responsive
+- See `.ship/design-notes.md`
 
 ## Integration Points
-
-- CPA network API (fetch offers, get tracking links, receive conversion postbacks).
-- Traffic network Advertiser API (create/pause/scale campaigns, set budget caps, pull stats per zone/creative).
-- LLM API (generate landers + creatives).
-- Notification channel (Telegram Bot API).
-- VPS (host the tracker, landing pages, dashboard, scheduler).
+- `src/clients/llm.py` (page copy), `src/db.py`, `src/config.py` (MANAGED_SETTINGS), `src/scheduler.py`, `src/main.py`, `src/schema.sql`, existing dashboard, existing PropellerAds engine, existing tracker (click→conversion)
 
 ## Out of Scope (MVP)
-
-- Multiple traffic networks or CPA networks (one of each first).
-- Paid trackers (Voluum/Binom) and paid SEO tools.
-- Google/Meta/Bing ads (they ban these offers).
-- Sketchy verticals (sweepstakes "you won" content-lockers) — explicitly excluded.
-- Building our own affiliate offers; tax/accounting automation; multi-user.
-- Any guarantee of profit — see Success Criteria.
+- Autonomous product discovery (not possible via API — operator curates IDs)
+- Scraping the marketplace
+- Other networks (ClickBank/JVZoo/Amazon/CJ/Awin)
+- Promoting products that need manual per-vendor approval (auto-approve only)
+- A/B page variants, image scraping, email capture, comments, internal linking
 
 ## Success Criteria
-
-1. **Technical proof (must hit):** the full loop runs unattended on the VPS — fetch offer → generate lander+creatives → launch capped campaign → track clicks & conversions → optimizer pauses/scales/blacklists → daily report — with budget caps provably enforced.
-2. **Financial proof (the goal, not guaranteed):** at least one campaign reaches **revenue > ad spend** sustained over several days, running hands-off. Honest expectation: ~1-in-3 chance the *first* offer is profitable; the engine's job is to cycle offers cheaply until one is.
-3. **Safety proof:** across the whole run, total spend never exceeds the funded budget; hitting a cap pauses spend and notifies the operator.
-4. **Autonomy proof:** after setup, zero manual intervention is required for the engine to keep operating and optimizing.
+- Operator can paste IDs/links in the dashboard and they become candidates
+- Engine builds working promolinks and promotion pages with no code edits
+- Bad picks auto-dropped when stats are available; otherwise judged by the live ad test
+- Click tracking works end-to-end (`/aff/{slug}` → Digistore24 promolink with campaign key)
+- Dashboard shows product list + page stats
+- Keys configurable from Settings without redeploy

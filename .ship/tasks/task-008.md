@@ -1,32 +1,36 @@
-# Task 008: Landing page + ad creative generation
+# Task 008: Dashboard "Products to promote" panel + explainer
 
 ## Type
 ui
 
 ## Description
-LLM generates a fast, mobile-first pre-lander (bridge page) for an offer plus push ad creatives (title/description/icon). The lander warms the click before sending it to the CPA offer. (Plan Sections 4, 5.)
+Operator-facing panel to paste product links/IDs, with a self-serve inline explainer, plus a live status list. This is the only manual step in the whole track.
 
 ## Files
-- `src/generate.py` (create)
-- `src/templates/lander_base.html` (create)
+- `src/dashboard.py` (modify — add authed GET data + `POST /dashboard/products`)
+- `src/templates/dashboard.html` (modify — add panel)
 
 ## Requirements
-1. `generate_lander(offer) -> path`: LLM writes angle + headline + body copy for the offer's vertical; render into `lander_base.html`; write static file to `landers/{slug}.html`. CTA links to `/go/{click_id}` (click_id injected at serve time via template placeholder).
-2. `generate_creatives(offer) -> list`: LLM produces N push creatives — title ≤ ~30 chars, description ≤ ~45 chars. Persist to `creatives` table (status active).
-3. Icon image (MVP): generate a simple icon with Pillow (text/initial on a colored circle) saved to `static/icons/`. Good enough for MVP; real images later.
-4. Lander must be mobile-first, single-column, fast (no heavy assets), with one clear CTA button.
+1. `POST /dashboard/products` (authed like other dashboard routes): read `products` form field, call `affiliate_research.add_products(...)`, redirect back to `/dashboard` with a saved flag.
+2. Dashboard data: add an `affiliate_products` list (id, product_id, headline, commission_pct, cancel_rate, status, stats_ok, page slug+status) to the dashboard context.
+3. `dashboard.html` panel "Products to promote":
+   - `<textarea name="products">` (one link/ID per line) + Save button posting to `/dashboard/products`.
+   - **Collapsible inline explainer** (`<details>`): steps (open Digistore24 marketplace → pick by rules → copy product link → paste here) + cheat-sheet (commission 50%+, low cancel rate, auto-approve only, $30–90, avoid grey/scam niches). Same content as `HOW-TO-PICK-PRODUCTS.md`.
+   - Live table of products with status badges; show a "stats unavailable — judged by live test" tag when `stats_ok=0`.
+4. Match the existing dark dashboard styling.
 
 ## Existing Code to Reference
-- `src/clients/llm.py` (Task 006), `src/db.py`, `src/models.py`.
-- `.ship/plan.md` Section 4 (mobile-first, fast-loading rationale).
+- `src/dashboard.py` (`register_dashboard_routes`, auth via `_is_authed`, settings POST pattern)
+- `src/templates/dashboard.html` (section/card styling)
+- `HOW-TO-PICK-PRODUCTS.md` (explainer copy)
 
 ## Acceptance Criteria
-- [ ] `generate_lander(offer)` writes a valid mobile-first HTML file with a CTA to `/go/...`.
-- [ ] `generate_creatives(offer)` returns creatives within push char limits, persisted.
-- [ ] An icon image is produced per creative/campaign.
+- [ ] Pasting IDs/links and clicking Save inserts products and they appear in the list
+- [ ] Explainer is visible/collapsible with the pick rules
+- [ ] Unauthed POST is rejected like other dashboard routes
 
 ## Dependencies
-- Task 006, Task 007, Task 003
+- Task 004
 
 ## Commit Message
-feat: AI landing page + push creative generation
+feat: dashboard product intake panel with pick-guide explainer

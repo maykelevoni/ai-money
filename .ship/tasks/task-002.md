@@ -1,31 +1,27 @@
-# Task 002: Project scaffold + config
+# Task 002: Config keys & readiness for Digistore24
 
 ## Description
-Stand up the Python project skeleton: dependencies, config loader, FastAPI app that boots and serves /health. Everything else builds on this. (Plan Sections 1, 7.)
+Expose Digistore24 settings through the existing DB→env→default resolver and the dashboard-managed settings list.
 
 ## Files
-- `requirements.txt` (create)
-- `config/.env.example` (modify — expand to ALL keys + thresholds, documented)
-- `src/config.py` (create)
-- `src/main.py` (create)
-- `README.md` (create — short: what it is + honest odds from spec)
+- `src/config.py` (modify)
 
 ## Requirements
-1. `requirements.txt`: fastapi, uvicorn, apscheduler, httpx, anthropic, jinja2, python-dotenv, pillow.
-2. `config/.env.example` documents every var: CPA + traffic + ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DOMAIN, DASHBOARD_TOKEN, and all optimizer thresholds (GLOBAL_BUDGET, DAILY_CAP, SCALE_ROI, KILL_ROI, KILL_SPEND, MIN_ZONE_CLICKS, MIN_CREATIVE_CLICKS, MIN_CONV).
-3. `config.py` loads `.env`, validates required keys are present, exposes a typed `settings` object; fails fast with a clear message if a required key is missing.
-4. `main.py`: FastAPI app with `/health` returning `{"status":"ok"}`. Runnable via `uvicorn src.main:app`.
+1. Add `_LiveSettings` properties: `digistore24_api_key` (resolve `DIGISTORE24_API_KEY`, fall back to existing `DIGISTORE` env var), `digistore24_affiliate_name` (resolve `DIGISTORE24_AFFILIATE_NAME`, default ""), `digistore24_min_commission` (float, default 50.0), `digistore24_max_cancel_rate` (float, default 15.0).
+2. Add to `MANAGED_SETTINGS`: `DIGISTORE24_API_KEY` (password/secret), `DIGISTORE24_AFFILIATE_NAME` (text), `DIGISTORE24_MIN_COMMISSION` (number), `DIGISTORE24_MAX_CANCEL_RATE` (number).
+3. Add `has_digistore() -> bool` returning `bool(settings.digistore24_api_key)`.
+4. Do NOT change existing engine-readiness for the CPA engine; the affiliate track gates independently on `has_digistore()`.
 
 ## Existing Code to Reference
-- `.ship/plan.md` Section 7 (deps) and Section 8 (file map).
+- `src/config.py` — `_resolve`, `_resolve_float`, the existing properties, `MANAGED_SETTINGS`, `has_cpa()`
 
 ## Acceptance Criteria
-- [ ] `pip install -r requirements.txt` succeeds.
-- [ ] `uvicorn src.main:app` boots; `GET /health` returns ok.
-- [ ] Missing a required env var produces a clear startup error naming the var.
+- [ ] `from src.config import settings; settings.digistore24_api_key` returns the `DIGISTORE` value already in `config/.env`
+- [ ] `config.has_digistore()` is True with that key present
+- [ ] New rows appear on the dashboard Settings page
 
 ## Dependencies
-- Task 001 (uses its key names)
+- none
 
 ## Commit Message
-chore: project scaffold, config loader, FastAPI health endpoint
+feat: add Digistore24 config keys and readiness check

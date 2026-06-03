@@ -1,29 +1,32 @@
-# Task 005: CPA + traffic network API clients
+# Task 005: Promotion page template
+
+## Type
+ui
 
 ## Description
-Thin, typed wrappers around the two money-side APIs, informed by the Task 001 spike findings. These are the only modules that talk to those networks. (Plan Section 5.)
+Light-theme promotion/review page template, visually distinct from the dark bridge landers. Follows `.ship/design-notes.md`.
 
 ## Files
-- `src/clients/cpa.py` (create)
-- `src/clients/traffic.py` (create)
+- `src/templates/affiliate_review.html` (create)
 
 ## Requirements
-1. `cpa.py`: `list_offers(filters)`, `get_tracking_url(offer_id)`. Returns normalized dicts/dataclasses (not raw JSON).
-2. `traffic.py`: `create_campaign(...)`, `add_creatives(...)`, `set_daily_budget(campaign_id, amount)`, `pause_campaign(campaign_id)`, `exclude_zone(campaign_id, zone)`, `get_zone_stats(campaign_id)`. Match the exact endpoints confirmed in `spike/FINDINGS.md`.
-3. Use httpx with timeouts + basic retry on 429/5xx. Keys from `config.settings`.
-4. No business logic here — wrappers only. Raise typed errors on failure.
+1. Light theme, white background, single centered column max 720px, fully mobile responsive (inline `<style>`, no build step — match how existing templates are self-contained).
+2. Sections rendered from context vars: affiliate disclosure bar (top), h1, Quick Verdict card (star rating 1–5 + numeric score + 2-sentence summary + CTA button), what_is, how_it_works, benefits, pros/cons two-column grid, who_for, pricing, verdict, FAQ (loop), footer with disclosure.
+3. CTA button href = `/aff/{{ slug }}`.
+4. `<head>`: `<title>`, meta description, canonical, `robots: index,follow`, Schema.org Review + FAQPage JSON-LD built from the same vars.
+5. Use Jinja2 (matches `Jinja2Templates`). Guard optional lists with `{% if %}`.
 
 ## Existing Code to Reference
-- `spike/check_apis.py` and `spike/FINDINGS.md` (Task 001 — authoritative for endpoints/macros).
-- `src/config.py`.
+- `src/templates/lander_base.html` (self-contained template style)
+- `.ship/design-notes.md` and `.ship/design-refs/` (layout/tokens)
 
 ## Acceptance Criteria
-- [ ] All listed methods exist with typed signatures and normalized returns.
-- [ ] Endpoints/params match FINDINGS.md.
-- [ ] Network errors surface as typed exceptions, not raw httpx errors.
+- [ ] Template renders with a sample context without Jinja errors
+- [ ] Star rating, pros/cons grid, FAQ, disclosure bar all present
+- [ ] Valid Review + FAQPage JSON-LD in head
 
 ## Dependencies
-- Task 001, Task 002
+- Task 001
 
 ## Commit Message
-feat: CPA and traffic network API clients
+feat: add affiliate promotion page template

@@ -1,28 +1,29 @@
-# Task 006: LLM + Telegram clients
+# Task 006: LLM page generation
 
 ## Description
-Wrappers for content generation (Anthropic, cheap model) and notifications (Telegram Bot API). (Plan Section 5.)
+Generate a promotion page per product via the LLM and persist it.
 
 ## Files
-- `src/clients/llm.py` (create)
-- `src/clients/telegram.py` (create)
+- `src/affiliate_generate.py` (create)
 
 ## Requirements
-1. `llm.py`: wraps the Anthropic SDK pinned to a cheap model (Claude Haiku). `complete(system, prompt, max_tokens)` returning text. Centralize the model id so cost stays controlled. Use prompt caching where the system prompt is reused.
-2. `telegram.py`: `send(text)` via Bot API `sendMessage` using TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID. Markdown enabled, fails soft (log, don't crash the engine) if Telegram is down.
-3. Keys from `config.settings`.
+1. `generate_page(product_row) -> str` (returns slug): prompt the LLM (via `src/clients/llm.py`, model `settings.llm_model`) to return JSON with: title, meta_desc, h1, what_is, how_it_works, benefits (list), pros (list), cons (list), who_for, pricing, verdict, rating (1-5 float), summary, faq (list of {q,a}). Feed it the product headline/description/commission from the row.
+2. Render `affiliate_review.html` with those vars + slug; write to `pages/{slug}.html` (create `pages/` if missing). Slug = kebab-case of headline, deduped against `affiliate_pages.slug`.
+3. Insert a row into `affiliate_pages` (product_id, slug, title, file_path, status='live').
+4. `generate_pending(limit: int) -> int` — generate pages for candidate products that have no page yet, up to `limit`; return count. Respect LLM budget (small limit).
+5. Tolerate malformed LLM JSON (retry once, then skip with a logged warning).
 
 ## Existing Code to Reference
-- `src/config.py` (Task 002).
-- Anthropic SDK usage — see the `claude-api` skill conventions (caching, model ids).
+- `src/generate.py` (LLM call pattern, JSON parsing, file writing for landers)
+- `src/clients/llm.py` (client interface)
 
 ## Acceptance Criteria
-- [ ] `llm.complete(...)` returns text from the cheap model.
-- [ ] `telegram.send(...)` delivers a message to the configured chat.
-- [ ] Telegram failure logs a warning and does not raise.
+- [ ] `generate_page` writes `pages/{slug}.html` and inserts an `affiliate_pages` row
+- [ ] Slug collisions get a numeric suffix
+- [ ] Malformed JSON does not crash the job
 
 ## Dependencies
-- Task 002
+- Task 001, 005
 
 ## Commit Message
-feat: Anthropic LLM and Telegram notification clients
+feat: LLM generation of affiliate promotion pages

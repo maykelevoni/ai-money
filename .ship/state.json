@@ -1,9 +1,9 @@
 {
   "project": "ai-money",
-  "feature": "autonomous-income-engine",
-  "phase": "testing",
-  "current_task": 15,
-  "total_tasks": 15,
+  "feature": "affiliate-pages",
+  "phase": "complete",
+  "current_task": 10,
+  "total_tasks": 10,
   "completed_tasks": [
     1,
     2,
@@ -14,17 +14,13 @@
     7,
     8,
     9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    15
+    10
   ],
   "skipped_tasks": [],
   "failed_tasks": [],
   "test_command": "pytest -q",
-  "verified": false,
-  "created_at": "2026-05-31T00:00:00Z",
-  "updated_at": "2026-05-31T16:14:50Z"
+  "verified": true,
+  "created_at": "2026-06-03T00:00:00Z",
+  "updated_at": "2026-06-03T18:24:53Z",
+  "tests_written": true
 }
